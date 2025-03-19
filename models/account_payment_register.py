@@ -3,28 +3,32 @@ from odoo.exceptions import ValidationError, UserError
 from collections import defaultdict
 from odoo.tools import frozendict
 import pprint
+import logging
 
+_logger = logging.getLogger(__name__)
 
 class CustomAccountPaymentRegister(models.TransientModel):
     _name = 'custom.account.payment.register'
     _inherit = 'account.payment.register'
 
+    is_internal_transfer = fields.Boolean('Internal Transfer',default=False)
     amount_received = fields.Monetary(currency_field='currency_id', store=True, readonly=True)
     line_ids = fields.Many2many('account.move.line', 'account_payment_register_move_line_multiple_rel', 'wizard_id', 'line_id',
         string="Journal items", readonly=True, copy=False,)
-    multiple_payment_id = fields.Many2one('account.payment.multiplemethods', required=True, ondelete='cascade')
+    multiple_payment_id = fields.Many2one('account.payment.group', required=True, ondelete='cascade')
     can_edit_wizard = fields.Boolean(default=True)
     l10n_latam_check_number = fields.Char(string='Número de cheque')
     l10n_latam_check_payment_date = fields.Date(string="Fecha de pago del cheque")
     l10n_latam_check_id = fields.Many2one(
         comodel_name='account.payment',
-        string='Check', 
+        string='Cheque', 
         copy=False,
         check_company=True,
     )
     l10n_latam_manual_checks = fields.Boolean(
         related='journal_id.l10n_latam_manual_checks',
     )
+    l10n_latam_check_bank_id = fields.Many2one()
     payment_method_code = fields.Char(
         related='payment_method_line_id.code')
     
@@ -40,6 +44,10 @@ class CustomAccountPaymentRegister(models.TransientModel):
         ('customer', 'Customer'),
         ('supplier', 'Vendor'),
     ], store=True, copy=False,)
+
+    exchange_rate = fields.Float('Exchange_rate')
+
+    
     @api.model
     def create(self, vals):
         record = super(CustomAccountPaymentRegister, self).create(vals)
@@ -48,26 +56,17 @@ class CustomAccountPaymentRegister(models.TransientModel):
                 record.l10n_latam_check_number = record.journal_id.l10n_check_next_number
         return record
         
-    @api.onchange('journal_id','payment_method_line_id')
-    def _compute_l10n_latam_check_number(self):
-        for wizard in self:
-            if not wizard.l10n_latam_check_number:
-                if wizard.journal_id.l10n_check_next_number:
-                    wizard.l10n_latam_check_number = wizard.journal_id.l10n_check_next_number
     
-    @api.depends('amount_received', 'company_id', 'currency_id', 'payment_date','l10n_latam_check_id')
+    @api.depends('l10n_latam_check_id')
     def _compute_amount(self):
         for wizard in self:
             if wizard.l10n_latam_check_id:
-                wizard.amount = wizard.l10n_latam_check_id.amount
-            else:
-                if wizard.amount_received:
-                    if wizard.amount_received > 0:
-                        wizard.amount = wizard.amount_received
-                    else:
-                        wizard.amount_received = 0
+                wizard.amount = wizard.l10n_latam_check_id.amount  # Si hay cheque, usa su monto
+            elif not wizard.amount:
+                if wizard.amount_received > 0:
+                    wizard.amount = wizard.amount_received
                 else:
-                    wizard.amount = None
+                    wizard.amount = 0
                     
     def _init_payments(self, to_process):
         """ Create the payments.
@@ -89,25 +88,28 @@ class CustomAccountPaymentRegister(models.TransientModel):
    
     
     def _create_payment_vals_from_wizard(self):
-        payment_vals = {
-            'date': self.payment_date,
-            'amount': self.amount,
-            'payment_type': self.payment_type,
-            'partner_type': self.partner_type,
-            'journal_id': self.journal_id.id,
-            'company_id': self.company_id.id,
-            #'currency_id': 19,
-            'partner_id': self.partner_id.id,
-            'partner_bank_id': self.partner_bank_id.id,
-            'payment_method_line_id': self.payment_method_line_id.id,
-            #'destination_account_id': self.line_ids[0].account_id.id,
-            'write_off_line_vals': [],
-            'l10n_latam_check_number':self.l10n_latam_check_number,
-            'l10n_latam_check_payment_date':self.l10n_latam_check_payment_date,
-            'l10n_latam_check_id':self.l10n_latam_check_id.id,
-            'multiple_payment_id':self.multiple_payment_id.id,
-        }
-        return payment_vals
+            payment_vals = {
+                'date': self.payment_date,
+                'amount': self.amount,
+                'payment_type': self.payment_type,
+                'partner_type': self.partner_type,
+                'journal_id': self.journal_id.id,
+                'company_id': self.company_id.id,
+                'currency_id': self.currency_id.id,
+                'partner_id': self.partner_id.id,
+                'partner_bank_id': self.partner_bank_id.id,
+                'payment_method_line_id': self.payment_method_line_id.id,
+                #'destination_account_id': self.line_ids[0].account_id.id,
+                'write_off_line_vals': [],
+                'l10n_latam_check_number':self.l10n_latam_check_number,
+                'l10n_latam_check_payment_date':self.l10n_latam_check_payment_date,
+                'l10n_latam_check_id':self.l10n_latam_check_id.id,
+                'multiple_payment_id':self.multiple_payment_id.id,
+                'amount_company_currency':self.amount * self.exchange_rate,
+                'manual_company_currency':True
+            }
+            _logger.info(f"Payment vals: {payment_vals}")
+            return payment_vals
     
     
     def _create_payments(self):

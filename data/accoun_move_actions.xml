@@ -1,0 +1,22 @@
+<odoo>
+    <data>
+        <record id="action_create_payment_group_from_invoice" model="ir.actions.server">
+            <field name="name">Crear Pago en Grupo</field>
+            <field name="model_id" ref="account.model_account_move"/>
+            <field name="binding_view_types">list</field>
+            <field name="state">code</field>
+            <field name="code">
+                action = records.create_payment_group_from_invoice()
+            </field>
+        </record>
+        
+        <!--<record id="action_create_payment_group_ir_model_data" model="ir.model.data">
+            <field name="name">crear_pago_en_grupo</field>
+            <field name="module">account</field>
+            <field name="model">ir.actions.server</field>
+            <field name="res_id" ref="action_create_payment_group_from_invoice"/>
+        </record>-->
+
+
+    </data>
+</odoo>

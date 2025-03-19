@@ -26,7 +26,6 @@
     }, 
     "depends": [
         "account",
-        "account_payment",
         "account_payment_pro",
         "l10n_ar_withholding_ux",
         "l10n_ar_account_withholding", 
@@ -36,9 +35,13 @@
         'security/ir.model.access.csv',
         'views/account_payment_group_views.xml',
         'views/account_payment_register.xml',
-        'views/report_withholdings_template.xml',
-        'views/report_payment_with_withholdings.xml',
+        'views/account_move_views.xml',
+        'reports/report_withholdings_template.xml',
+        'reports/report_payment_with_withholdings.xml',
         'views/account_journal_views.xml',
+        'views/account_existing_payment_wizard.xml',
+        'data/accoun_move_actions.xml',
+        'data/ir_sequence.xml'
     ],
 
 }

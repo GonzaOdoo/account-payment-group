@@ -137,7 +137,7 @@
     <record id="action_report_withholding_certificate" model="ir.actions.report">
         <field name="name">Certificado de Retención</field>
         <field name="model">account.payment.group</field>
-        <field name="binding_model_id" ref="model_account_payment_multiplemethods"/>
+        <field name="binding_model_id" ref="model_account_payment_group"/>
         <field name="report_type">qweb-pdf</field>
         <field name="print_report_name">'Certificado de Retención - %s' % (object.name or '')</field>
         <field name="report_name">account-payment-group.report_withholding_certificate</field>

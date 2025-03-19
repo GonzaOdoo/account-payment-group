@@ -45,7 +45,7 @@
                     <button name="confirm_debts" type="object" string="Pagar deudas" class="btn-primary" invisible="state != 'debts' or not to_pay_move_line_ids"/>
                     <button name="avanced_payments" type="object" string="Pagos adelantados" class="btn-primary" invisible="state != 'debts' or to_pay_move_line_ids"/>
                     <button name="action_reconcile_payments" string="Publicar Pagos" type="object" class="btn-primary" invisible="state != 'draft'"/>
-                    <button name="compute_withholdingss" string="Recalcular retenciones" type="object" invisible="state != 'draft' or partner_type == 'customer'"/>
+                    <button name="compute_withholdingss" string="Calcular retenciones" type="object" invisible="state != 'draft' or partner_type == 'customer'"/>
                     <button name="reset_to_draft" string="Restablecer a borrador" type="object" invisible="state != 'posted' and state != 'cancelled'"/>
                     <button name="cancel_payments" string="Cancelar" type="object" invisible="state != 'draft'"/>
                     <button name="action_send_email" string="Enviar mail" type="object" invisible="1"/>
@@ -67,37 +67,47 @@
                     <group>
                         <group>
                             <field name="is_advanced_payment" invisible="1"/>
-                            <field name="partner_id"/>
+                            <field name="partner_id" readonly="state != 'draft'" required="True"/>
                             <field name="partner_type"/>
-                        </group>
-                        <group>
                             <field name="company_id" invisible="1"/>
                             <label for="retencion_ganancias" invisible="partner_type == 'customer'"/>
                             <div invisible="partner_type == 'customer'">
                                 <field name="retencion_ganancias" class="oe_inline" readonly="True" required="state == 'draft'"/>
                                 <field name="regimen_ganancias_id" class="oe_inline" readonly="True" invisible="retencion_ganancias != 'nro_regimen'" required="retencion_ganancias == 'nro_regimen' and state == 'debts'"  options='{"no_open": True, "no_create": True}'/>
                             </div>
+                            <field name="currency_id" readonly= "state not in ['draft','debts']"/>
+                            <field name ="exchange_rate" invisible="currency_id != 1" readonly="state not in ['draft','debts']"/>
                         </group>
                         <group>
-                            <field name="payment_difference" invisible="state == 'posted' or state == 'canceled' or state == 'debts'"/>
+                            <field name="other_currency" invisible="1"/>
+                            <field name="company_id" invisible="1"/>
                             <field name="payment_total"/>
+                            <field name="payment_total_currency" invisible="not other_currency"/>
+                            <field name="withholdings_amount"/>
+                            <!--<field name="payment_difference" invisible="state == 'posted' or state == 'canceled' or state == 'debts'"/>-->
+                            <field name="payment_difference_currency" invisible="state == 'posted' or state == 'canceled' or state == 'debts'"/>
+                        </group>
+                        <group>
+                            
                         </group>
                         <notebook>
-                            <page string="Deudas" invisible="state not in['debts','draft'] or is_advanced_payment">
-                                <button name="add_all" string="Añadir todo" type="object" invisible="state not in ['debts']"/>
-                                <button name="remove_all" string="Remover todo" type="object" invisible="state not in ['debts']"/>
-                                <field name="to_pay_move_line_ids" readonly="state != 'debts'" domain="[('account_id.reconcile', '=', True), 
+                            <page string="Deudas">
+                                <button name="add_all" string="Añadir todo" type="object" invisible="state not in ['draft']"/>
+                                <button name="remove_all" string="Remover todo" type="object" invisible="state not in ['draft']"/>
+                                <field name="to_pay_move_line_ids" readonly="state != 'draft'" domain="[('account_id.reconcile', '=', True), 
                                                ('partner_id', '=', partner_id),
                                                ('reconciled', '=', False), 
                                                ('full_reconcile_id', '=', False), 
                                                ('company_id', '=', company_id), 
                                                ('move_id.state', '=', 'posted'), 
                                                ('account_id.account_type', '=', 'asset_receivable' if partner_type == 'customer' else 'liability_payable'), 
-                                               ('move_id.move_type', 'in', ['out_invoice', 'in_invoice'])]" 
+                                               ]" 
                                                help="Payment will be automatically matched with the oldest lines of this list (by maturity date). You can remove any line you dont want to be matched."/>
+                                                
                             </page>
                             <page string="Pagos"  options="{'no_create': True}" invisible="state not in ['draft','posted','cancelled']">
-                                <button name="add_payment" string="Añadir pago" type="object" invisible="state != 'draft'"/>
+                                <button name="add_payment" string="Nuevo Pago" type="object" class="btn-success" invisible="state != 'draft'"/>
+                                <button name="action_open_payment_selection_wizard" type="object" string="Agregar Pagos Existentes" invisible="1"/>
                                 <field name="to_pay_payment_ids" readonly="True">
                                     <tree edit="false" sample="1" decoration-info="state == 'draft'" decoration-muted="state == 'cancel'">
                                         <field name="company_currency_id" column_invisible="True"/>
@@ -115,53 +125,27 @@
                                         <field name="activity_ids" widget="list_activity" optional="hide"/>
                                         <field name="amount_company_currency_signed" widget="monetary" string="Amount" sum="Total"/>
                                         <field name="state" widget="badge" decoration-info="state == 'draft'" decoration-success="state == 'posted'"/>
-                                        <button name="delete_payment" type="object" string="Eliminar" invisible="state != 'draft'"/>
+                                        <button name="delete_payment" type="object" icon="fa-trash" title="Eliminar" class="btn-danger" invisible="state != 'draft'"/>
                                     </tree>
                                 </field>
                             </page>
-                            <page string="Retenciones"  invisible="state not in ['draft','posted','cancelled'] or not withholding_line_ids">
-                                <field name="withholding_line_ids" nolabel="1" colspan="2">
-                                    <!-- TODO hacer tree editable y de ultima con boton de edicion o similar si es una con acumulado. -->
-                                    <!-- tal vez tree editable en customer y no editable en supplier -->
-                                    <tree>
-                                    <!-- <tree editable="bottom"> -->
+                            <page string="Retenciones"  invisible="state not in ['draft','posted','cancelled'] or partner_type == 'customer'">
+                                <field name="withholding_line_ids" nolabel="1" colspan="2" readonly="state != 'draft'">
+                                    <tree editable="bottom">
                                         <field name="withholding_sequence_id" column_invisible="True"/>
                                         <field name="company_id" column_invisible="True"/>
                                         <field name="currency_id" column_invisible="True"/>
-                                        <field name="tax_id" domain="[('l10n_ar_withholding_payment_type', '=', parent.partner_type), ('company_id', '=', company_id)]" options="{'no_open': True, 'no_create': True}"/>
+                                        <field name="tax_id" domain="[('l10n_ar_withholding_payment_type', '=', parent.partner_type), ('company_id', '=', parent.company_id)]" options="{'no_open': True, 'no_create': True}"/>
                                         <field name="name" readonly="withholding_sequence_id"/>
                                         <field name="base_amount"/>
                                         <field name="amount"/>
+                                        <field name="currency_id"/>
+                                        <button name="378" icon="fa-print " title="Print withholding voucher" type="action" invisible="parent.partner_type != 'supplier' or parent.state == 'draft'"/>
+                                        <button type="object" name="get_formview_action" icon="fa-pencil-square-o" title="open" help="Open"/>
                                     </tree>
-                                    <form>
-                                        <group>
-                                            <group>
-                                                <field name="withholding_sequence_id" invisible="True"/>
-                                                <field name="company_id" invisible="True"/>
-                                                <field name="currency_id" invisible="True"/>
-                                                <field name="tax_id" domain="[('l10n_ar_withholding_payment_type', '=', parent.partner_type), ('company_id', '=', company_id)]" options="{'no_open': True, 'no_create': True}"/>
-                                                <field name="name" readonly="withholding_sequence_id"/>
-                                                <field name="base_amount"/>
-                                                <field name="amount"/>
-                                            </group>
-                                            <group name="withholding_data">
-                                                <field name="automatic" invisible="True"/>
-                                                <field name="withholding_accumulated_payments" invisible="True"/>
-                                                <field name="withholdable_invoiced_amount" invisible="not automatic"/>
-                                                <field name="withholdable_advanced_amount" invisible="not automatic"/>
-                                                <field name="accumulated_amount" invisible="not withholding_accumulated_payments"/>
-                                                <field name="total_amount" invisible="not automatic"/>
-                                                <field name="withholding_non_taxable_minimum" invisible="not automatic"/>
-                                                <field name="withholding_non_taxable_amount" invisible="not automatic"/>
-                                                <field name="withholdable_base_amount" invisible="not automatic"/>
-                                                <field name="period_withholding_amount" invisible="not withholding_accumulated_payments"/>
-                                                <field name="previous_withholding_amount" invisible="not withholding_accumulated_payments"/>
-                                                <field name="computed_withholding_amount" invisible="not automatic"/>
-                                            </group>
-                                        </group>
-                                    </form>
                                 </field>
                             </page>
+                            
                             <page string="Pagado" invisible="state != 'posted'">
                                 <field name="matched_move_line_ids" context="{'tree_view_ref': 'account_payment_pro.view_move_line_with_matched_tree'}"/>
                             </page>

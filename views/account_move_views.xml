@@ -1,0 +1,20 @@
+<odoo>
+    <data>
+        <!-- Heredar la vista formulario de account.move -->
+        <record id="view_move_form_inherited" model="ir.ui.view">
+            <field name="name">account.move.form.inherited</field>
+            <field name="model">account.move</field>
+            <field name="inherit_id" ref="account.view_move_form"/>
+            <field name="arch" type="xml">
+                <!-- Insertar el botón después de action_register_payment -->
+                <xpath expr="//button[@name='action_register_payment']" position="after">
+                    <button name="create_payment_group_from_invoice_form" 
+                            type="object" 
+                            string="Registrar Pago en Grupo" 
+                            class="oe_highlight" 
+                            invisible="state != 'posted' or payment_state not in ('not_paid', 'partial') or move_type not in ('out_invoice', 'out_refund', 'in_invoice', 'in_refund', 'out_receipt', 'in_receipt')"/>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</odoo>

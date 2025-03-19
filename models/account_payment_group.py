@@ -4,7 +4,9 @@ from odoo import models, fields, api, Command, _
 from odoo.exceptions import ValidationError, UserError
 from collections import defaultdict
 import ast
+import logging
 
+_logger = logging.getLogger(__name__)
 class Account_payment_methods(models.Model):
     _name = 'account.payment.group'
     _inherit = ['mail.thread', 'mail.activity.mixin']
@@ -13,7 +15,18 @@ class Account_payment_methods(models.Model):
         string='Date', 
         default=fields.Date.context_today,  # Asigna el día actual por defecto
     )
+    currency_id = fields.Many2one(
+    'res.currency',
+    string='Divisa',
+    compute='_compute_currency_id',
+    store=True,
+    tracking=True,
+    required=True,
+    default=lambda self: self.env.company.currency_id,
+    readonly = False
+)
     
+        
     company_id = fields.Many2one(
         comodel_name='res.company',
         string='Empresa',
@@ -22,8 +35,8 @@ class Account_payment_methods(models.Model):
     ) 
     company_currency_id = fields.Many2one(
         'res.currency',
-        string='Divisa',
-        compute='_compute_currency_id',
+        string='Divisa de Compania',
+        default=lambda self: self.env.company.currency_id,
         store=True
     )
     name = fields.Char(string='',readonly=True)
@@ -53,7 +66,6 @@ class Account_payment_methods(models.Model):
             help='This lines are the ones the user has selected to be paid.',
             copy=False,
             readonly=False,
-            compute='_compute_to_pay_move_lines',
         )
     to_pay_payment_ids = fields.Many2many(
         'account.payment',
@@ -78,7 +90,7 @@ class Account_payment_methods(models.Model):
         ('draft', 'Borrador'),
         ('posted', 'Publicado'), 
         ('cancelled', 'Cancelado'),
-    ], string='Status', default='debts',tracking=True)
+    ], string='Status', default='draft',tracking=True)
 
     selected_debt = fields.Monetary(
         # string='To Pay lines Amount',
@@ -106,6 +118,11 @@ class Account_payment_methods(models.Model):
         compute='_compute_payment_total',
         string='Total a pagar',
         currency_field='company_currency_id'
+    )
+    payment_total_currency = fields.Monetary(
+        compute='_compute_payment_total_currency',
+        string='Total a pagar',
+        currency_field='currency_id'
     )
     payment_difference = fields.Monetary(
         compute='_compute_payment_difference',
@@ -152,14 +169,26 @@ class Account_payment_methods(models.Model):
         compute='_compute_selected_debt_untaxed',
         currency_field='company_currency_id',
     )
+    selected_debt_untaxed_total = fields.Monetary(
+        string='Selected Debt Untaxed Total',
+        compute='_compute_selected_debt_untaxed_total',
+        currency_field='company_currency_id',
+    )
+    
     withholdable_advanced_amount = fields.Monetary(
         'Adjustment / Advance (untaxed)',
         help='Used for withholdings calculation',
         currency_field='company_currency_id',
     )
     is_advanced_payment = fields.Boolean(
-        'Pagos avanzados',
-        default = False,
+        string="Pagos avanzados",
+        compute="_compute_is_advanced_payment",
+        store=True,  # Si lo necesitas en búsquedas o reportes
+    )
+    withholdings_amount = fields.Monetary(
+        compute='_compute_withholdings_amount',
+        string='Retenciones',
+        currency_field='currency_id'
     )
     """"
     matched_amount_untaxed = fields.Monetary(
@@ -177,6 +206,64 @@ class Account_payment_methods(models.Model):
     """
     display_name = fields.Char(string='Número', compute='_compute_display_name')
 
+    ###DIVISAS
+    exchange_rate = fields.Float(string='Tasa de cambio',compute = '_compute_exchange_rate',store = True,readonly=False)
+    
+    manual_company_currency = fields.Boolean(
+        string="Ajuste manual de cambio",
+        default=False,
+        help="Enable manual editing of Amount on Company Currency and automatic recalculation of Exchange Rate."
+)
+    amount_company_currency = fields.Monetary('Amount Currency',
+                                              currency_field='company_currency_id',
+                                                            )
+    other_currency = fields.Boolean('Other currency',compute ='_compute_other_currency',default = False, readonly = True)
+
+    payment_difference_currency = fields.Monetary(
+        compute='_compute_payment_difference_currency',
+        readonly=True,
+        string="Diferencia",
+        currency_field='currency_id',
+        help="Diferencia entre deuda seleccionada y monto a pagar"
+    )
+    payment_total_currency = fields.Monetary(
+        compute='_compute_payment_total_currency',
+        string='Total en divisa',
+        currency_field='currency_id'
+    )
+    selected_debt_currency = fields.Monetary(
+        # string='To Pay lines Amount',
+        string='Deuda seleccionada',
+        compute='_compute_selected_debt_currency',
+        currency_field='currency_id',
+    )
+    to_pay_amount_currency = fields.Monetary(
+        compute='_compute_to_pay_amount_currency',
+        inverse='_inverse_to_pay_amount_currenyc',
+        string='Monto a pagar',
+        # string='Total To Pay Amount',
+        readonly=True,
+        currency_field='currency_id',
+    )
+    unreconciled_amount_currency = fields.Monetary(
+        string='Ajuste / Avance',
+        currency_field='currency_id',
+    )
+
+    @api.depends('to_pay_move_line_ids')
+    def _compute_is_advanced_payment(self):
+        for rec in self:
+            rec.is_advanced_payment = not bool(rec.to_pay_move_line_ids)
+    
+    @api.depends('to_pay_move_line_ids')
+    def _compute_currency_id(self):
+        for rec in self:
+            if rec.to_pay_move_line_ids:
+                first_line_currency = rec.to_pay_move_line_ids[0].currency_id
+                rec.currency_id = first_line_currency or rec.company_currency_id
+            else:
+                rec.currency_id = rec.company_currency_id
+    
     @api.depends('partner_type')
     def _compute_payment_type(self):
         for record in self:
@@ -248,11 +335,29 @@ class Account_payment_methods(models.Model):
                 rec.regimen_ganancias_id = rec.partner_id.default_regimen_ganancias_id
             else:
                 rec.regimen_ganancias_id = False
-
+                
+    @api.depends('to_pay_payment_ids','withholding_line_ids')
+    def _compute_payment_total_currency(self):
+        for rec in self:
+            rec.payment_total_currency = 0
+            for payment in rec.to_pay_payment_ids:
+                if payment.payment_type == 'outbound' and payment.partner_type == 'customer' or \
+                        payment.payment_type == 'inbound' and payment.partner_type == 'supplier':
+                    rec.payment_total_currency += -payment.amount
+                else:
+                    rec.payment_total_currency += payment.amount
+    
     @api.depends('amount_company_currency_signed_pro')
     def _compute_payment_total(self):
         for rec in self:
             rec.payment_total = rec.amount_company_currency_signed_pro + sum(rec.withholding_line_ids.mapped('amount'))
+   
+    
+    @api.depends('withholding_line_ids.amount')
+    def _compute_withholdings_amount(self):
+        for rec in self:
+            rec.withholdings_amount = sum(rec.withholding_line_ids.mapped('amount'))
+        
         
     @api.depends('to_pay_payment_ids','withholding_line_ids')
     def _compute_amount_company_currency_signed_pro(self):
@@ -294,6 +399,17 @@ class Account_payment_methods(models.Model):
                 factor = invoice and invoice._get_tax_factor() or 1.0
                 selected_debt_untaxed += line.amount_residual * factor
             rec.selected_debt_untaxed = selected_debt_untaxed * (rec.partner_type == 'supplier' and -1.0 or 1.0)
+    
+    def _compute_selected_debt_untaxed_total(self):
+        for rec in self:
+            selected_debt_untaxed = 0.0
+            for line in rec.to_pay_move_line_ids._origin:
+                # factor for total_untaxed
+                invoice = line.move_id
+                factor = invoice and invoice._get_tax_factor() or 1.0
+                selected_debt_untaxed += line.amount_residual * factor
+            rec.selected_debt_untaxed = selected_debt_untaxed * (rec.partner_type == 'supplier' and -1.0 or 1.0)
+    
     @api.depends('partner_id', 'partner_type', 'company_id')
     def _compute_to_pay_move_lines(self):
         # TODO ?
@@ -346,6 +462,7 @@ class Account_payment_methods(models.Model):
             ('company_id', '=', self.company_id.id), ('move_id.state', '=', 'posted'),
             ('account_id.reconcile', '=', True), ('reconciled', '=', False), ('full_reconcile_id', '=', False),
             ('account_id.account_type', '=', 'asset_receivable' if self.partner_type == 'customer' else 'liability_payable'),
+            
         ]
 
     def action_open_manual_reconciliation_widget(self):
@@ -431,18 +548,22 @@ class Account_payment_methods(models.Model):
         if not self.is_advanced_payment:
             self.ensure_one()
         # Crear el asistente y llenar line_ids con to_pay_move_line_ids
+        amount_to_send = self.payment_difference
+        if self.currency_id != self.company_currency_id:
+            amount_to_send = self.payment_difference_currency
         payment_register = self.env['custom.account.payment.register'].create({
             'line_ids': [(6, 0, self.to_pay_move_line_ids.ids)],
             'multiple_payment_id': self.id,# Aquí asignamos el ID del primer modelo
-            'amount_received' : self.payment_difference,
+            'amount_received' : amount_to_send,
             'journal_id':self.last_journal_used.id,
             'payment_method_line_id':self.last_payment_method_line_id.id,
             'is_advanced_payment':self.is_advanced_payment,
             'company_id':self.company_id.id,
             'partner_type':self.partner_type,
             'partner_id':self.partner_id.id,
-            'currency_id':self.company_currency_id.id,
-            'payment_type':self.payment_type
+            'currency_id':self.currency_id.id,
+            'payment_type':self.payment_type,
+            'exchange_rate':self.exchange_rate
         })
     
         # Devolver la acción para abrir el asistente en una ventana modal
@@ -522,6 +643,10 @@ class Account_payment_methods(models.Model):
         
         invoices = self.to_pay_move_line_ids.filtered(lambda line: not line.reconciled).sorted(key=lambda line: line.date)
         payments = self.to_pay_payment_ids.filtered(lambda payment: payment.state == 'draft')
+
+        credit_lines = self.to_pay_move_line_ids.filtered(lambda line: line.amount_residual > 0)
+        _logger.info(f"Lines: {credit_lines}---{invoices}")
+
         if self.is_advanced_payment:
             for payment in payments:
                 payment.action_post()
@@ -531,7 +656,6 @@ class Account_payment_methods(models.Model):
             first_payment = True  # Variable para marcar el primer pago
             # Conciliar secuencialmente
             for payment in payments:
-                
                 remaining_amount = payment.amount
                 if first_payment and self.withholding_line_ids:
                     payment.write({
@@ -542,6 +666,10 @@ class Account_payment_methods(models.Model):
                     })
                     first_payment = False
                 for invoice_line in invoices:
+                    for credit in credit_lines:
+                         _logger.info(f"Credit:{credit}")
+                         payment.write({'to_pay_move_line_ids': [(4, credit.id)]})
+                             
                     invoice_balance = invoice_line.amount_residual
                     invoice_remaining = invoice_balance
                     if payment.partner_type == 'customer' and payment.payment_type == 'inbound':
@@ -567,9 +695,9 @@ class Account_payment_methods(models.Model):
             #payments.action_post()
         if not self.name:
             if self.payment_type == 'inbound':
-                self.name = self.env['ir.sequence'].next_by_code('x_recibo_de_pagos') or 'New'
+                self.name = self.env['ir.sequence'].next_by_code('recibo_de_pagos') or 'New'
             else:
-                self.name = self.env['ir.sequence'].next_by_code('x_reporte_de_pagos') or 'New'
+                self.name = self.env['ir.sequence'].next_by_code('reporte_de_pagos') or 'New'
             self.sequence_used = self.name
         self.state = 'posted'
         return
@@ -710,6 +838,7 @@ class Account_payment_methods(models.Model):
             accounts = rec.to_pay_move_line_ids.mapped('account_id')
             if len(accounts) > 1:
                 raise ValidationError(_('To Pay Lines must be of the same account!'))
+                
     def _get_withholdable_amounts(
             self, withholding_amount_type, withholding_advances):
         """ Method to help on getting withholding amounts from account.tax
@@ -726,7 +855,7 @@ class Account_payment_methods(models.Model):
             total_field = 'selected_debt'
 
         if withholding_amount_type == 'untaxed_amount':
-            withholdable_invoiced_amount = self[untaxed_field]
+            withholdable_invoiced_amount = sum(self.to_pay_move_line_ids.mapped('move_id.amount_untaxed'))
         else:
             withholdable_invoiced_amount = self[total_field]
 
@@ -795,35 +924,96 @@ class Account_payment_methods(models.Model):
     @api.model
     def _get_valid_payment_account_types(self):
         return ['asset_receivable', 'liability_payable']
-class l10nArPaymentRegisterWithholding(models.Model):
-    _inherit = 'l10n_ar.payment.withholding'
-    multiple_payment_id = fields.Many2one('account.payment.multiplemethods', required=False, ondelete='cascade')
-    payment_id = fields.Many2one('account.payment', required=False, ondelete='cascade')
 
-class AccountPayment(models.Model):
-    _inherit = 'account.payment'
 
-    multiple_payment_id = fields.Many2one(
-        comodel_name='account.payment.multiplemethods',  # Apunta al modelo 'account.payment.multiplemethods'
-        string='Multiple Payment',
-        ondelete='restrict',  # Puedes cambiar esto según tus necesidades: 'cascade', 'restrict', etc.
-        help='Selecciona el registro de pago múltiple relacionado.'
-    )
+ # DIVISAS
+
+    @api.depends('to_pay_move_line_ids', 'to_pay_move_line_ids.amount_residual')
+    def _compute_selected_debt_currency(self):
+        for rec in self:
+            # factor = 1
+            rec.selected_debt_currency = sum(rec.to_pay_move_line_ids._origin.mapped('amount_residual_currency')) * (-1.0 if rec.partner_type == 'supplier' else 1.0)
+            # TODO error en la creacion de un payment desde el menu?
+            # if rec.payment_type == 'outbound' and rec.partner_type == 'customer' or \
+            #         rec.payment_type == 'inbound' and rec.partner_type == 'supplier':
+            #     factor = -1
+            # rec.selected_debt = sum(rec.to_pay_move_line_ids._origin.mapped('amount_residual')) * factor
     
+    @api.depends('payment_total_currency', 'to_pay_amount_currency')
+    def _compute_payment_difference_currency(self):
+        for rec in self:
+            rec.payment_difference_currency = rec._get_payment_difference_currency() - sum(self.withholding_line_ids.mapped('amount'))             
     
-    def delete_payment(self):
+    def _get_payment_difference_currency(self):
+        return self.to_pay_amount_currency - self.payment_total_currency
+
+    @api.depends(
+        'selected_debt_currency', 'unreconciled_amount_currency')
+    def _compute_to_pay_amount_currency(self):
+        for rec in self:
+            rec.to_pay_amount_currency = rec.selected_debt_currency + rec.unreconciled_amount_currency
+    
+    @api.onchange('to_pay_amount_usd')
+    def _inverse_to_pay_amount_usd(self):
+        for rec in self:
+            rec.unreconciled_amount_currency = rec.to_pay_amount_currency - rec.selected_debt_currency
+            
+    @api.depends('currency_id')
+    def _compute_other_currency(self):
+        _logger.info('Compute other currency')
+        for rec in self:
+            if rec.currency_id == rec.company_currency_id:
+                rec.other_currency = False
+            else:
+                rec.other_currency = True
+            _logger.info(f"Other currency: {rec.other_currency}")
+    
+    @api.depends('other_currency', 'to_pay_move_line_ids')
+    def _compute_exchange_rate(self):
+        for rec in self:
+            _logger.info(f"Other currency exchange: {rec.other_currency}")
+            if rec.other_currency:
+                if rec.manual_company_currency:
+                    if rec.other_currency:
+                        rec.exchange_rate = rec.payment_total and (
+                            rec.amount_company_currency / rec.payment_total) or 0.0
+                    else:
+                        rec.exchange_rate = False
+                    continue
+                if rec.state != 'posted' and len(rec.to_pay_move_line_ids) > 0:
+                    first_move_line = rec.to_pay_move_line_ids[0]
+                    if first_move_line.move_id.l10n_ar_currency_rate:
+                        rec.exchange_rate = first_move_line.move_id.l10n_ar_currency_rate
+                        _logger.info(rec.exchange_rate)
+                    else:
+                        rec.exchange_rate = rec.payment_total_currency and (
+                            rec.amount_company_currency / rec.payment_total) or 0.0
+                
+                else:
+                    if rec.matched_move_line_ids:
+                        first_move_line = rec.matched_move_line_ids[0] if rec.matched_move_line_ids else False
+                        if first_move_line.move_id.l10n_ar_currency_rate:
+                            rec.exchange_rate = first_move_line.move_id.l10n_ar_currency_rate
+                            _logger.info(rec.exchange_rate)
+                        else:
+                            rec.exchange_rate = rec.payment_total and (
+                                rec.amount_company_currency / rec.payment_total) or 0.0
+                    else:
+                        rec.exchange_rate = rec.payment_total and (
+                                rec.amount_company_currency / rec.payment_total) or 0.0
+            else:
+                rec.exchange_rate = 0.0
+
+
+    def action_open_payment_selection_wizard(self):
+        """ Abre el wizard para seleccionar pagos no conciliados. """
         self.ensure_one()
-        self.unlink()
-        
-class AccountMove(models.Model):
-    _inherit = 'account.move'
-
-    currency_id = fields.Many2one(
-        'res.currency',
-        string='Currency',
-        tracking=True,
-        required=False,
-        compute='_compute_currency_id', inverse='_inverse_currency_id', store=True, readonly=False, precompute=True,)
-
-   
-
+        return {
+            'name': 'Seleccionar Pagos No Conciliados',
+            'type': 'ir.actions.act_window',
+            'res_model': 'account.payment.selection.wizard',
+            'view_mode': 'form',
+            'view_id': self.env.ref('account-payment-group.view_account_payment_selection_wizard').id,  # Reemplaza con el ID de la vista del wizard
+            'target': 'new',
+            'context': {'default_payment_group_id': self.id},
+        }
