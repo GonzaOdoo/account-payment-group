@@ -43,5 +43,5 @@
         'data/accoun_move_actions.xml',
         'data/ir_sequence.xml'
     ],
-
+    'post_init_hook': 'create_sequences',
 }
