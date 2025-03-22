@@ -47,7 +47,25 @@ class CustomAccountPaymentRegister(models.TransientModel):
 
     exchange_rate = fields.Float('Exchange_rate')
 
-    
+    draft_check_ids = fields.Many2many(
+        'account.payment',
+        compute='_compute_draft_check_ids',
+        string="Cheques en borrador en este grupo"
+    )
+
+    @api.depends('multiple_payment_id')
+    def _compute_draft_check_ids(self):
+        """ Obtiene los pagos en estado 'draft' dentro del grupo actual que contienen cheques """
+        for record in self:
+            if record.multiple_payment_id:
+                payments = self.env['account.payment'].search([
+                    ('multiple_payment_id', '=', record.multiple_payment_id.id),
+                    ('state', '=', 'draft'),  # Solo pagos en borrador
+                    ('l10n_latam_check_id', '!=', False)  # Solo pagos que ya tienen un cheque asignado
+                ])
+                record.draft_check_ids = [(6, 0, payments.mapped('l10n_latam_check_id').ids)]
+            else:
+                record.draft_check_ids = [(5, 0, 0)]  # Vacía el campo si no hay grupo
     @api.model
     def create(self, vals):
         record = super(CustomAccountPaymentRegister, self).create(vals)
