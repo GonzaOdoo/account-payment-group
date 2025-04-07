@@ -119,6 +119,10 @@ class Account_payment_methods(models.Model):
         string='Total a pagar',
         currency_field='company_currency_id'
     )
+    payment_total_list = fields.Monetary(
+        string='Total en pagos',
+        currency_field='company_currency_id'
+    )
     payment_total_currency = fields.Monetary(
         compute='_compute_payment_total_currency',
         string='Total a pagar',
@@ -351,8 +355,9 @@ class Account_payment_methods(models.Model):
     def _compute_payment_total(self):
         for rec in self:
             rec.payment_total = rec.amount_company_currency_signed_pro + sum(rec.withholding_line_ids.mapped('amount'))
-   
     
+
+            
     @api.depends('withholding_line_ids.amount')
     def _compute_withholdings_amount(self):
         for rec in self:
@@ -408,7 +413,7 @@ class Account_payment_methods(models.Model):
                 invoice = line.move_id
                 factor = invoice and invoice._get_tax_factor() or 1.0
                 selected_debt_untaxed += line.amount_residual * factor
-            rec.selected_debt_untaxed = selected_debt_untaxed * (rec.partner_type == 'supplier' and -1.0 or 1.0)
+            rec.selected_debt_untaxed_total = selected_debt_untaxed * (rec.partner_type == 'supplier' and -1.0 or 1.0)
     
     @api.depends('partner_id', 'partner_type', 'company_id')
     def _compute_to_pay_move_lines(self):

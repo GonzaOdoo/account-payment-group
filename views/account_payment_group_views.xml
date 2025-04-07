@@ -81,7 +81,9 @@
                         <group>
                             <field name="other_currency" invisible="1"/>
                             <field name="company_id" invisible="1"/>
-                            <field name="payment_total"/>
+                            <field name="to_pay_amount" invisible="state == 'posted' or state == 'canceled' or state == 'debts'"/>
+                            <field name="payment_total" string="Total acumulado"/>
+                            <field name="amount_company_currency_signed_pro" string="Pagos"/>
                             <field name="payment_total_currency" invisible="not other_currency"/>
                             <field name="withholdings_amount"/>
                             <!--<field name="payment_difference" invisible="state == 'posted' or state == 'canceled' or state == 'debts'"/>-->
@@ -94,7 +96,7 @@
                             <page string="Deudas">
                                 <button name="add_all" string="Añadir todo" type="object" invisible="state not in ['draft']"/>
                                 <button name="remove_all" string="Remover todo" type="object" invisible="state not in ['draft']"/>
-                                <field name="to_pay_move_line_ids" readonly="state != 'draft'" domain="[('account_id.reconcile', '=', True), 
+                                <field name="to_pay_move_line_ids"  readonly="state != 'draft'" domain="[('account_id.reconcile', '=', True), 
                                                ('partner_id', '=', partner_id),
                                                ('reconciled', '=', False), 
                                                ('full_reconcile_id', '=', False), 
@@ -102,7 +104,26 @@
                                                ('move_id.state', '=', 'posted'), 
                                                ('account_id.account_type', '=', 'asset_receivable' if partner_type == 'customer' else 'liability_payable'), 
                                                ]" 
-                                               help="Payment will be automatically matched with the oldest lines of this list (by maturity date). You can remove any line you dont want to be matched."/>
+                                               help="Payment will be automatically matched with the oldest lines of this list (by maturity date). You can remove any line you dont want to be matched.">
+                                <tree edit="0" create="0" editable="bottom">
+                                    <field name="date" readonly="True"/>
+                                    <field name="date_maturity" optional="hide" readonly="True"/>
+                                    <field name="move_id" required="0" readonly="True"/>
+                                    <field name="journal_id" options='{"no_open":True}' readonly="True" optional="hide"/>
+                                    <field name="name" readonly="True" optional="hide"/>
+                                    <field name="ref" optional="show" readonly="True"/>
+                                    <field name="statement_id" column_invisible="True" readonly="True"/>
+                                    <field name="account_id" options='{"no_open":True}' readonly="True" optional="hide"/>
+                                    <field name="balance" optional="hide" string="Amount" readonly="True"/>
+                                    <field name="amount_residual" readonly="True"/>
+                                    <field name="amount_currency" groups="base.group_multi_currency" readonly="True"/>
+                                    <field name="amount_residual_currency" optional="hide" groups="base.group_multi_currency" readonly="True"/>
+                                    <field name="currency_id" column_invisible="True" readonly="True"/>
+                                    <field name="company_currency_id" column_invisible="True" readonly="True"/>
+                                    <field name="company_id" column_invisible="True" readonly="True"/>
+                                </tree>
+
+                                </field>
                                                 
                             </page>
                             <page string="Pagos"  options="{'no_create': True}" invisible="state not in ['draft','posted','cancelled']">
@@ -152,7 +173,7 @@
                         </notebook>
                         <group>
                             <field name="selected_debt" invisible="state == 'posted' or state == 'canceled' or state == 'debts'"/>
-                            <field name="to_pay_amount" invisible="state == 'posted' or state == 'canceled' or state == 'debts'"/>
+                            <!--<field name="to_pay_amount" invisible="state == 'posted' or state == 'canceled' or state == 'debts'"/>-->
                         </group>
                     </group>
                 </sheet>
