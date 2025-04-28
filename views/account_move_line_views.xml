@@ -1,0 +1,18 @@
+<odoo>
+    <record id="view_move_line_payment_tree_group_inherit" model="ir.ui.view">
+        <field name="name">account.move.line.payment.tree.inherit</field>
+        <field name="model">account.move.line</field>
+        <field name="inherit_id" ref="account.view_move_line_payment_tree"/>
+        <field name="arch" type="xml">
+            <!-- Añadir el botón al header -->
+            <xpath expr="//tree/header" position="inside">
+                <button 
+                    name="create_payment_group_from_lines" 
+                    type="object" 
+                    string="Crear Pago en Grupo" 
+                    class="oe_highlight" 
+                />
+            </xpath>
+        </field>
+    </record>
+</odoo>

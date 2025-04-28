@@ -9,6 +9,50 @@
                 action = records.create_payment_group_from_invoice()
             </field>
         </record>
+
+        <record id="external_id_payment_group_receipt_template" model="mail.template">
+            <field name="name">Pago en grupo: recibo de pago</field>
+            <field name="model_id" ref="model_account_payment_group"/>
+            <field name="subject">{{ object.company_id.name }} Pago recibido (Ref {{ object.name or 'n/a' }})</field>
+            <field name="body_html"><![CDATA[
+            <div style="margin: 0px; padding: 0px;">
+                <p style="box-sizing:border-box;margin: 0px; padding: 0px; font-size: 13px;">
+                    Apreciable&nbsp;<t t-out="object.partner_id.name or '''estimado'''"></t>
+                </p>
+                <p style="box-sizing:border-box;margin: 0px; padding: 0px; font-size: 13px;">
+                    <br><br>
+                    <t t-if="object.partner_type == 'customer'">
+                        Le agradecemos que haya realizado su pago. Aquí está su recibo&nbsp;
+                    </t>
+                    <t t-elif="object.partner_type == 'supplier'">
+                        Le informamos que hemos realizado el pago. Aquí está el comprobante&nbsp;
+                    </t>
+                    <t t-else="">
+                        Le informamos sobre el movimiento de pago. Aquí está el documento&nbsp;
+                    </t>
+                    <t t-out="object.name or '''Nombre de recibo'''"></t>
+                </p>
+                <p style="box-sizing:border-box;margin: 0px; padding: 0px; font-size: 13px;"><br></p>
+                <p style="box-sizing:border-box;margin: 0px; padding: 0px; font-size: 13px;"><br>
+                    No dude en contactarnos si tiene alguna pregunta.
+                    <br><br>
+                    Atentamente,<t t-if="not is_html_empty(user.signature)"></t>
+                </p>
+                <pre style="white-space-collapse:preserve;text-wrap-mode:wrap;overflow-y:auto;overflow-x:auto;margin: 0px 0px 16px; box-sizing: border-box; white-space: pre-wrap; overflow: auto; unicode-bidi: bidi-override; direction: ltr; font-size: 13px; font-family: SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;">
+                    <br><br><t t-out="object.company_id.name or '''Empresa'''"></t><br><br>
+                </pre>
+                <p style="margin:0px 0 16px 0;box-sizing:border-box;"></p>
+            </div>
+            ]]></field>
+            <field name="lang">{{ object.partner_id.lang }}</field>
+            <field name="auto_delete" eval="True"/>
+            <field name="model">account.payment.group</field>
+            <field name="partner_to">{{ object.partner_id.id }}</field>
+            <field name="description">Enviado manualmente al cliente al hacer clic en "Enviar recibo por correo electrónico" en la acción de pago</field>
+            <field name="template_category">custom_template</field>
+            <!-- Asumiendo que tienes estos XML IDs disponibles -->
+            <field name="report_template_ids" eval="[(6, 0, [ref('action_report_payment_with_withholdings')])]"/>
+    </record>
         
         <!--<record id="action_create_payment_group_ir_model_data" model="ir.model.data">
             <field name="name">crear_pago_en_grupo</field>
