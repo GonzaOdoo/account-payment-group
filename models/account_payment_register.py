@@ -28,7 +28,7 @@ class CustomAccountPaymentRegister(models.TransientModel):
     l10n_latam_manual_checks = fields.Boolean(
         related='journal_id.l10n_latam_manual_checks',
     )
-    l10n_latam_check_bank_id = fields.Many2one()
+    #l10n_latam_check_bank_id = fields.Many2one()
     payment_method_code = fields.Char(
         related='payment_method_line_id.code')
     
@@ -122,6 +122,8 @@ class CustomAccountPaymentRegister(models.TransientModel):
                 'l10n_latam_check_number':self.l10n_latam_check_number,
                 'l10n_latam_check_payment_date':self.l10n_latam_check_payment_date,
                 'l10n_latam_check_id':self.l10n_latam_check_id.id,
+                'l10n_latam_check_bank_id':self.l10n_latam_check_bank_id.id,
+                'l10n_latam_check_issuer_vat':self.l10n_latam_check_issuer_vat,
                 'multiple_payment_id':self.multiple_payment_id.id,
                 'amount_company_currency':self.amount * self.exchange_rate,
                 'manual_company_currency':True

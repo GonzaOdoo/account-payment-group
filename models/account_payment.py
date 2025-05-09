@@ -115,20 +115,21 @@ class AccountMove(models.Model):
         wth_amount = sum(self.l10n_ar_withholding_line_ids.mapped('amount'))
         if self.currency_id != self.company_currency_id:
             wth_amount = wth_amount * self.exchange_rate
-        _logger.info(f'wth_amount: {wth_amount}')
-        _logger.info(f'difference inherited: {super()._get_payment_difference()}')
+        #_logger.info(f'wth_amount: {wth_amount}')
+        #_logger.info(f'difference inherited: {super()._get_payment_difference()}')
         payment_difference = super()._get_payment_difference() - wth_amount
-        _logger.info(f'payment_difference: {payment_difference}')
+        #_logger.info(f'payment_difference: {payment_difference}')
         return payment_difference
     
-    @api.depends('l10n_ar_withholding_line_ids.amount')
-    def _compute_payment_total(self):
-        super()._compute_payment_total()
-        for rec in self:
-            wth_amount = sum(self.l10n_ar_withholding_line_ids.mapped('amount'))
-            if self.currency_id != self.company_currency_id:
-                wth_amount = wth_amount * rec.exchange_rate
-            rec.payment_total += wth_amount
+    #Se está repitiendo la suma de retenciones, por ahora no lo necesito.Revisar cuando necesite retenciones en otra moneda
+    #@api.depends('l10n_ar_withholding_line_ids.amount')
+    #def _compute_payment_total(self):
+     #   super()._compute_payment_total()
+      #  for rec in self:
+       #     wth_amount = sum(self.l10n_ar_withholding_line_ids.mapped('amount'))
+        #    if self.currency_id != self.company_currency_id:
+         #       wth_amount = wth_amount * rec.exchange_rate
+          #  rec.payment_total += wth_amount
             
     def _prepare_witholding_write_off_vals(self):
         self.ensure_one()
