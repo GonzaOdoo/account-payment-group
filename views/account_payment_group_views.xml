@@ -25,14 +25,14 @@
         <field name="name">account.payment.group.tree</field>
         <field name="model">account.payment.group</field>
         <field name="arch" type="xml">
-            <tree edit="false" sample="1" decoration-info="state == 'draft'" decoration-muted="state == 'cancel'" default_order="create_date desc">
+            <list edit="false" sample="1" decoration-info="state == 'draft'" decoration-muted="state == 'cancel'" default_order="create_date desc">
                 <field name="date" string="Fecha"/>
                 <field name="display_name" string="Número"/>
                 <field name="partner_id"/>
                 <field name="payment_total"/>
                 <field name="state"  widget="badge" decoration-info="state == 'draft'" decoration-success="state == 'posted'"/>
                 <!-- Otros campos que quieras mostrar en la vista tipo tree -->
-            </tree>
+            </list>
         </field>
     </record>
 
@@ -105,7 +105,7 @@
                                                ('account_id.account_type', '=', 'asset_receivable' if partner_type == 'customer' else 'liability_payable'), 
                                                ]" 
                                                help="Payment will be automatically matched with the oldest lines of this list (by maturity date). You can remove any line you dont want to be matched.">
-                                <tree edit="0" create="0" editable="bottom">
+                                <list edit="0" create="0" editable="bottom">
                                     <field name="date" readonly="True"/>
                                     <field name="date_maturity" optional="hide" readonly="True"/>
                                     <field name="move_id" required="0" readonly="True"/>
@@ -121,7 +121,7 @@
                                     <field name="currency_id" column_invisible="True" readonly="True"/>
                                     <field name="company_currency_id" column_invisible="True" readonly="True"/>
                                     <field name="company_id" column_invisible="True" readonly="True"/>
-                                </tree>
+                                </list>
 
                                 </field>
                                                 
@@ -130,7 +130,7 @@
                                 <button name="add_payment" string="Nuevo Pago" type="object" class="btn-success" invisible="state != 'draft'"/>
                                 <button name="action_open_payment_selection_wizard" type="object" string="Agregar Pagos Existentes" invisible="1"/>
                                 <field name="to_pay_payment_ids" readonly="True">
-                                    <tree edit="false" sample="1" decoration-info="state == 'draft'" decoration-muted="state == 'cancel'">
+                                    <list edit="false" sample="1" decoration-info="state == 'draft'" decoration-muted="state == 'cancel'">
                                         <field name="company_currency_id" column_invisible="True"/>
                                         <field name="suitable_journal_ids" column_invisible="True"/>
                                         <field name="available_payment_method_line_ids" column_invisible="True"/>
@@ -147,12 +147,12 @@
                                         <field name="amount_company_currency_signed" widget="monetary" string="Amount" sum="Total"/>
                                         <field name="state" widget="badge" decoration-info="state == 'draft'" decoration-success="state == 'posted'"/>
                                         <button name="delete_payment" type="object" icon="fa-trash" title="Eliminar" class="btn-danger" invisible="state != 'draft'"/>
-                                    </tree>
+                                    </list>
                                 </field>
                             </page>
                             <page string="Retenciones"  invisible="state not in ['draft','posted','cancelled'] or partner_type == 'customer'">
                                 <field name="withholding_line_ids" nolabel="1" colspan="2" readonly="state != 'draft'">
-                                    <tree editable="bottom">
+                                    <list editable="bottom">
                                         <field name="withholding_sequence_id" column_invisible="True"/>
                                         <field name="company_id" column_invisible="True"/>
                                         <field name="currency_id" column_invisible="True"/>
@@ -163,12 +163,12 @@
                                         <field name="currency_id"/>
                                         <button name="378" icon="fa-print " title="Print withholding voucher" type="action" invisible="parent.partner_type != 'supplier' or parent.state == 'draft'"/>
                                         <button type="object" name="get_formview_action" icon="fa-pencil-square-o" title="open" help="Open"/>
-                                    </tree>
+                                    </list>
                                 </field>
                             </page>
                             
                             <page string="Pagado" invisible="state != 'posted'">
-                                <field name="matched_move_line_ids" context="{'tree_view_ref': 'account_payment_pro.view_move_line_with_matched_tree'}"/>
+                                <field name="matched_move_line_ids" context="{'list_view_ref': 'account_payment_pro.view_move_line_with_matched_list'}"/>
                             </page>
                         </notebook>
                         <group>
@@ -191,7 +191,7 @@
         <field name="model">account.move.line</field>
         <field eval="99" name="priority"/>
         <field name="arch" type="xml">
-            <tree string="Journal Items" edit="1">
+            <list string="Journal Items" edit="1">
                 <field name="date" readonly="True"/>
                 <field name="date_maturity" optional="hide" readonly="True"/>
                 <field name="move_id" required="0" readonly="True"/>
@@ -208,14 +208,14 @@
                 <field name="company_currency_id" column_invisible="True" readonly="True"/>
                 <field name="company_id" column_invisible="True" readonly="True"/>
                 <!--button type="object" icon="fa-external-link" help="Open Related Document" name="action_open_related_document"/-->
-            </tree>
+            </list>
         </field>
     </record>
     
     <record id="action_payment_methods_customer" model="ir.actions.act_window">
         <field name="name">Pagos en grupo</field>
         <field name="res_model">account.payment.group</field>
-        <field name="view_mode">tree,form</field>
+        <field name="view_mode">list,form</field>
         <field name="context">{'default_partner_type': 'customer'}</field>
         <field name="domain">[('partner_type', '=', 'customer'),('company_id', 'in', context.get('allowed_company_ids', []))]</field>
         <field name="search_view_id" ref="view_account_payment_multiplemethods_search"/>
@@ -224,7 +224,7 @@
     <record id="action_payment_methods_supplier" model="ir.actions.act_window">
         <field name="name">Pagos en grupo</field>
         <field name="res_model">account.payment.group</field>
-        <field name="view_mode">tree,form</field>
+        <field name="view_mode">list,form</field>
         <field name="context">{'default_partner_type': 'supplier'}</field>
         <field name="domain">[('partner_type', '=', 'supplier'),('company_id', 'in', context.get('allowed_company_ids', []))]</field>
         <field name="search_view_id" ref="view_account_payment_multiplemethods_search"/>
