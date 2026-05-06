@@ -27,8 +27,6 @@
     "depends": [
         "account",
         "account_payment_pro",
-        "l10n_ar_withholding_ux",
-        "l10n_ar_account_withholding", 
     ],
 
     'data': [
