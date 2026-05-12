@@ -25,9 +25,9 @@ class CustomAccountPaymentRegister(models.TransientModel):
         copy=False,
         check_company=True,
     )
-    l10n_latam_manual_checks = fields.Boolean(
-        related='journal_id.l10n_latam_manual_checks',
-    )
+    #l10n_latam_manual_checks = fields.Boolean(
+    #    related='journal_id.l10n_latam_manual_checks',
+    #)
     #l10n_latam_check_bank_id = fields.Many2one()
     payment_method_code = fields.Char(
         related='payment_method_line_id.code')

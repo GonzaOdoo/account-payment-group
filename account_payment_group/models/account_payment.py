@@ -8,12 +8,12 @@ _logger = logging.getLogger(__name__)
 class AccountMove(models.Model):
     _inherit = "account.payment"
 
-    multiple_payment_id = fields.Many2one(
-        comodel_name='account.payment.group',  # Apunta al modelo 'account.payment.multiplemethods'
-        string='Payment group',
-        ondelete='restrict',  # Puedes cambiar esto según tus necesidades: 'cascade', 'restrict', etc.
-        help='Selecciona el registro de pago múltiple relacionado.'
-    )
+    #multiple_payment_id = fields.Many2one(
+    #    comodel_name='account.payment.group',  # Apunta al modelo 'account.payment.multiplemethods'
+    #    string='Payment group',
+    #    ondelete='restrict',  # Puedes cambiar esto según tus necesidades: 'cascade', 'restrict', etc.
+    #    help='Selecciona el registro de pago múltiple relacionado.'
+    #)
     
     amount_company_currency = fields.Monetary(
         string='Amount on Company Currency',
@@ -26,7 +26,7 @@ class AccountMove(models.Model):
         default=False,
         help="Enable manual editing of Amount on Company Currency and automatic recalculation of Exchange Rate."
 )
-    @api.depends('amount', 'other_currency', 'to_pay_move_line_ids')
+    @api.depends('amount', 'to_pay_move_line_ids')
     def _compute_exchange_rate(self):
         for rec in self:
             if rec.other_currency:
@@ -62,7 +62,7 @@ class AccountMove(models.Model):
                 rec.exchange_rate = 0.0
 
     
-    @api.depends('amount', 'other_currency', 'force_amount_company_currency','exchange_rate')
+    @api.depends('amount')
     def _compute_amount_company_currency(self):
         """
         * Si las monedas son iguales devuelve 1
@@ -252,7 +252,7 @@ class AccountMove(models.Model):
             _logger.info(f'Final line: {str(line)}')
         return res
         
-    @api.depends('l10n_ar_withholding_line_ids.amount')
+    #@api.depends('l10n_ar_withholding_line_ids.amount')
     def _compute_withholdings_amount(self):
         for rec in self:
             total_withholdings = sum(rec.l10n_ar_withholding_line_ids.mapped('amount'))

@@ -5,7 +5,7 @@
         <field name="inherit_id" ref="account.view_move_line_payment_tree"/>
         <field name="arch" type="xml">
             <!-- Añadir el botón al header -->
-            <xpath expr="//tree/header" position="inside">
+            <xpath expr="//list/header" position="inside">
                 <button 
                     name="create_payment_group_from_lines" 
                     type="object" 

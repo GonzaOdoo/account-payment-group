@@ -5,7 +5,7 @@
         <field name="arch" type="xml">
             <form string="Registrar Pago">
                 <group>   
-                    <field name="line_ids" invisible="1"/>
+                    <!--<field name="line_ids" invisible="1"/>-->
                     <field name="amount_received" invisible="1"/>
                     <field name="can_edit_wizard" invisible="1" force_save="1"/>
                     <field name="can_group_payments" invisible="1" force_save="1"/>
@@ -35,13 +35,16 @@
                     <field name="journal_id" string="Diario" options="{'no_open': True, 'no_create': True}" required="1"/>
                     <field name="payment_method_line_id" string="Método de pago"
                            required="1"  options="{'no_create': True, 'no_open': True}"/>
-                    <field name="l10n_latam_check_id" invisible="payment_method_code not in ['in_third_party_checks', 'out_third_party_checks'] and not l10n_latam_check_id"  required="payment_method_code in ['in_third_party_checks', 'out_third_party_checks']" domain = "[('payment_method_code', '=', 'new_third_party_checks'), ('l10n_latam_check_current_journal_id', '=', journal_id), ('state', '=', 'posted'), ('company_id', '=', company_id),('id', 'not in', draft_check_ids),] if payment_type == 'outbound' else [('payment_method_code', '=', 'new_third_party_checks'), ('l10n_latam_check_current_journal_id', '=', False), ('state', '=', 'posted'), ('company_id', '=', company_id),('id', 'not in', draft_check_ids),]" context="{'search_view_ref': 'l10n_latam_check.view_account_payment_third_party_checks_search'}" options="{'no_create': True}"/>
+                  <!--  <field name="l10n_latam_check_id" invisible="payment_method_code not in ['in_third_party_checks', 'out_third_party_checks'] and not l10n_latam_check_id"  required="payment_method_code in ['in_third_party_checks', 'out_third_party_checks']" domain = "[('payment_method_code', '=', 'new_third_party_checks'), ('l10n_latam_check_current_journal_id', '=', journal_id), ('state', '=', 'posted'), ('company_id', '=', company_id),('id', 'not in', draft_check_ids),] if payment_type == 'outbound' else [('payment_method_code', '=', 'new_third_party_checks'), ('l10n_latam_check_current_journal_id', '=', False), ('state', '=', 'posted'), ('company_id', '=', company_id),('id', 'not in', draft_check_ids),]" context="{'search_view_ref': 'l10n_latam_check.view_account_payment_third_party_checks_search'}" options="{'no_create': True}"/>
                     <field name="l10n_latam_manual_checks" invisible="1"/>
                     <field name="payment_method_code" invisible="1"/>
                     <field name="l10n_latam_check_number" invisible="payment_method_code != 'new_third_party_checks' and (payment_method_code != 'check_printing' or not l10n_latam_manual_checks)" required="payment_method_code == 'new_third_party_checks' or (payment_method_code == 'check_printing' and l10n_latam_manual_checks)"/>
-                    <field name="l10n_latam_check_bank_id" string="Banco del Cheque" invisible="payment_method_code != 'new_third_party_checks' and (payment_method_code != 'check_printing' or not l10n_latam_manual_checks)" required="payment_method_code == 'new_third_party_checks' or (payment_method_code == 'check_printing' and l10n_latam_manual_checks)"/>
-                    <field name="l10n_latam_check_issuer_vat" string="CUIT del emisor" invisible="payment_method_code != 'new_third_party_checks' and (payment_method_code != 'check_printing' or not l10n_latam_manual_checks)"/>
+                    -->
+                    <!--<field name="l10n_latam_check_bank_id" string="Banco del Cheque" invisible="payment_method_code != 'new_third_party_checks' and (payment_method_code != 'check_printing' or not l10n_latam_manual_checks)" required="payment_method_code == 'new_third_party_checks' or (payment_method_code == 'check_printing' and l10n_latam_manual_checks)"/>
+                    -->
+                   <!-- <field name="l10n_latam_check_issuer_vat" string="CUIT del emisor" invisible="payment_method_code != 'new_third_party_checks' and (payment_method_code != 'check_printing' or not l10n_latam_manual_checks)"/>
                     <field name="l10n_latam_check_payment_date" invisible="payment_method_code != 'new_third_party_checks' and (payment_method_code != 'check_printing' or not l10n_latam_manual_checks)" />
+                    -->
                 </group>
                 <group name="group2">
                     <label for="amount"/>

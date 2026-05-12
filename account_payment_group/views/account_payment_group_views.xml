@@ -1,17 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <odoo>
-    <!-- Definición de las vistas -->
+    <!-- Definición de las vistas 
 
     <record id="view_account_payment_multiplemethods_search" model="ir.ui.view">
         <field name="name">account.payment.group.search</field>
         <field name="model">account.payment.group</field>
+        <field name="type">search</field>
         <field name="arch" type="xml">
             <search>
-                <!-- Campo de búsqueda para 'Pago' -->
                 <field name="name" string="Pago"/>
-                <!-- Campo de búsqueda para 'Cliente/proveedor' -->
                 <field name="partner_id" string="Cliente/Proveedor"/>
-                <!-- Otros filtros -->
                 <filter string="Borrador" name="Borrador" domain="[('state', '=', 'draft')]"/>
                 <filter string="Publicado" name="Publicado" domain="[('state', '=', 'posted')]"/>
                 <group expand="0" string="Group By">
@@ -20,7 +18,7 @@
             </search>
         </field>
     </record>
-    
+    -->
     <record id="view_account_payment_multiplemethods_tree" model="ir.ui.view">
         <field name="name">account.payment.group.tree</field>
         <field name="model">account.payment.group</field>
@@ -67,13 +65,14 @@
                     <group>
                         <group>
                             <field name="is_advanced_payment" invisible="1"/>
-                            <field name="partner_id" readonly="state != 'draft'" required="True"/>
+                            <field name="partner_id" readonly="state != 'draft'" required="1"/>
                             <field name="partner_type"/>
                             <field name="company_id" invisible="1"/>
                             <label for="retencion_ganancias" invisible="partner_type == 'customer'"/>
                             <div invisible="partner_type == 'customer'">
                                 <field name="retencion_ganancias" class="oe_inline" readonly="True" required="state == 'draft'"/>
-                                <field name="regimen_ganancias_id" class="oe_inline" readonly="True" invisible="retencion_ganancias != 'nro_regimen'" required="retencion_ganancias == 'nro_regimen' and state == 'debts'"  options='{"no_open": True, "no_create": True}'/>
+                                <!--<field name="regimen_ganancias_id" class="oe_inline" readonly="True" invisible="retencion_ganancias != 'nro_regimen'" required="retencion_ganancias == 'nro_regimen' and state == 'debts'"  options='{"no_open": True, "no_create": True}'/>
+                                    -->
                             </div>
                             <field name="currency_id" readonly= "state not in ['draft','debts']"/>
                             <field name ="exchange_rate" invisible="currency_id != 1" readonly="state not in ['draft','debts']"/>
@@ -96,11 +95,10 @@
                             <page string="Deudas">
                                 <button name="add_all" string="Añadir todo" type="object" invisible="state not in ['draft']"/>
                                 <button name="remove_all" string="Remover todo" type="object" invisible="state not in ['draft']"/>
-                                <field name="to_pay_move_line_ids"  readonly="state != 'draft'" domain="[('account_id.reconcile', '=', True), 
+                                <field name="to_pay_move_line_ids"  readonly="state != 'draft'" domain="[
                                                ('partner_id', '=', partner_id),
                                                ('reconciled', '=', False), 
                                                ('full_reconcile_id', '=', False), 
-                                               ('company_id', '=', company_id), 
                                                ('move_id.state', '=', 'posted'), 
                                                ('account_id.account_type', '=', 'asset_receivable' if partner_type == 'customer' else 'liability_payable'), 
                                                ]" 
@@ -132,7 +130,7 @@
                                 <field name="to_pay_payment_ids" readonly="True">
                                     <list edit="false" sample="1" decoration-info="state == 'draft'" decoration-muted="state == 'cancel'">
                                         <field name="company_currency_id" column_invisible="True"/>
-                                        <field name="suitable_journal_ids" column_invisible="True"/>
+                                        <!--<field name="suitable_journal_ids" column_invisible="True"/>-->
                                         <field name="available_payment_method_line_ids" column_invisible="True"/>
                                         <field name="date" readonly="state in ['cancel', 'posted']"/>
                                         <field name="name"/>
@@ -151,7 +149,7 @@
                                 </field>
                             </page>
                             <page string="Retenciones"  invisible="state not in ['draft','posted','cancelled'] or partner_type == 'customer'">
-                                <field name="withholding_line_ids" nolabel="1" colspan="2" readonly="state != 'draft'">
+                                <!--<field name="withholding_line_ids" nolabel="1" colspan="2" readonly="state != 'draft'">
                                     <list editable="bottom">
                                         <field name="withholding_sequence_id" column_invisible="True"/>
                                         <field name="company_id" column_invisible="True"/>
@@ -164,7 +162,7 @@
                                         <button name="378" icon="fa-print " title="Print withholding voucher" type="action" invisible="parent.partner_type != 'supplier' or parent.state == 'draft'"/>
                                         <button type="object" name="get_formview_action" icon="fa-pencil-square-o" title="open" help="Open"/>
                                     </list>
-                                </field>
+                                </field>-->
                             </page>
                             
                             <page string="Pagado" invisible="state != 'posted'">
@@ -177,11 +175,7 @@
                         </group>
                     </group>
                 </sheet>
-                <div class="oe_chatter">
-                    <field name="message_follower_ids" groups="base.group_user"/>
-                    <field name="activity_ids"/>
-                    <field name="message_ids"/>
-                </div>
+                <chatter/>
             </form>
         </field>
     </record> 
@@ -199,7 +193,7 @@
                 <field name="name" readonly="True" optional="hide"/>
                 <field name="ref" optional="show" readonly="True"/>
                 <field name="statement_id" column_invisible="True" readonly="True"/>
-                <field name="account_id" options='{"no_open":True}' domain="[('company_id', '=', company_id)]" readonly="True" optional="hide"/>
+                <!--<field name="account_id" options='{"no_open":True}' domain="[('company_id', '=', company_id)]" readonly="True" optional="hide"/>-->
                 <field name="balance" optional="hide" string="Amount" readonly="True"/>
                 <field name="amount_residual" readonly="True"/>
                 <field name="amount_currency" groups="base.group_multi_currency" readonly="True"/>
@@ -218,7 +212,7 @@
         <field name="view_mode">list,form</field>
         <field name="context">{'default_partner_type': 'customer'}</field>
         <field name="domain">[('partner_type', '=', 'customer'),('company_id', 'in', context.get('allowed_company_ids', []))]</field>
-        <field name="search_view_id" ref="view_account_payment_multiplemethods_search"/>
+       <!-- <field name="search_view_id" ref="view_account_payment_multiplemethods_search"/>-->
     </record>
     
     <record id="action_payment_methods_supplier" model="ir.actions.act_window">
@@ -227,16 +221,16 @@
         <field name="view_mode">list,form</field>
         <field name="context">{'default_partner_type': 'supplier'}</field>
         <field name="domain">[('partner_type', '=', 'supplier'),('company_id', 'in', context.get('allowed_company_ids', []))]</field>
-        <field name="search_view_id" ref="view_account_payment_multiplemethods_search"/>
+        <!--<field name="search_view_id" ref="view_account_payment_multiplemethods_search"/>-->
     </record>
     
-     <!-- Menú para Pagos de Clientes -->
+     <!-- Menú para Pagos de Clientes 
     <menuitem id="menu_payment_methods_customer"
               name="Pagos en grupo"
               parent="account.menu_finance_receivables"
               action="action_payment_methods_customer"
               sequence="10"/>
-
+    -->
     <!-- Menú para Pagos de Proveedores -->
     <menuitem id="menu_payment_methods_supplier"
               name="Pagos en grupo"

@@ -75,10 +75,10 @@ class Account_payment_methods(models.Model):
         string='Pagos no conciliados',
         domain="[('partner_id', '=', partner_id), ('state', '!=', 'reconciled'), ('partner_type', 'in', ['customer', 'supplier'])]"
     )
-    withholding_line_ids = fields.One2many(
-        'l10n_ar.payment.withholding', 'multiple_payment_id', string='Withholdings Lines',
+    #withholding_line_ids = fields.One2many(
+        #'account.tax', string='Withholdings Lines',
         # compute='_compute_l10n_ar_withholding_line_ids', readonly=False, store=True
-    )
+    #)
     matched_move_line_ids = fields.Many2many(
         'account.move.line',
         compute='_compute_matched_move_line_ids',
@@ -161,12 +161,12 @@ class Account_payment_methods(models.Model):
         string='Retención Ganancias',
         compute='_compute_retenciones_ganancias'
     )
-    regimen_ganancias_id = fields.Many2one(
-        'afip.tabla_ganancias.alicuotasymontos',
-        'Regimen Ganancias',
-        ondelete='restrict',
-        compute='_compute_regimen_ganancias_id',
-    )
+    #regimen_ganancias_id = fields.Many2one(
+    #    'afip.tabla_ganancias.alicuotasymontos',
+    #    'Regimen Ganancias',
+    #    ondelete='restrict',
+    #    compute='_compute_regimen_ganancias_id',
+    #)
     selected_debt_untaxed = fields.Monetary(
         # string='To Pay lines Amount',
         string='Selected Debt Untaxed',
@@ -190,7 +190,7 @@ class Account_payment_methods(models.Model):
         store=True,  # Si lo necesitas en búsquedas o reportes
     )
     withholdings_amount = fields.Monetary(
-        compute='_compute_withholdings_amount',
+        #compute='_compute_withholdings_amount',
         string='Retenciones',
         currency_field='currency_id'
     )
@@ -340,7 +340,7 @@ class Account_payment_methods(models.Model):
             else:
                 rec.regimen_ganancias_id = False
                 
-    @api.depends('to_pay_payment_ids','withholding_line_ids')
+    @api.depends('to_pay_payment_ids')
     def _compute_payment_total_currency(self):
         for rec in self:
             rec.payment_total_currency = 0
@@ -354,17 +354,18 @@ class Account_payment_methods(models.Model):
     @api.depends('amount_company_currency_signed_pro')
     def _compute_payment_total(self):
         for rec in self:
-            rec.payment_total = rec.amount_company_currency_signed_pro + sum(rec.withholding_line_ids.mapped('amount'))
+            rec.payment_total = rec.amount_company_currency_signed_pro
+            #rec.payment_total = rec.amount_company_currency_signed_pro + sum(rec.withholding_line_ids.mapped('amount'))
     
 
             
-    @api.depends('withholding_line_ids.amount')
-    def _compute_withholdings_amount(self):
-        for rec in self:
-            rec.withholdings_amount = sum(rec.withholding_line_ids.mapped('amount'))
+    #@api.depends('withholding_line_ids.amount')
+    #def _compute_withholdings_amount(self):
+    #    for rec in self:
+    #        rec.withholdings_amount = sum(rec.withholding_line_ids.mapped('amount'))
         
         
-    @api.depends('to_pay_payment_ids','withholding_line_ids')
+    @api.depends('to_pay_payment_ids')
     def _compute_amount_company_currency_signed_pro(self):
         """ new field similar to amount_company_currency_signed but:
         1. is positive for payments to suppliers
@@ -383,7 +384,8 @@ class Account_payment_methods(models.Model):
     @api.depends('payment_total', 'to_pay_amount', 'amount_company_currency_signed_pro')
     def _compute_payment_difference(self):
         for rec in self:
-            rec.payment_difference = rec._get_payment_difference() - sum(self.withholding_line_ids.mapped('amount'))             
+            rec.payment_difference = rec._get_payment_difference()
+            #rec.payment_difference = rec._get_payment_difference() - sum(self.withholding_line_ids.mapped('amount'))
     def _get_payment_difference(self):
         return self.to_pay_amount - self.amount_company_currency_signed_pro
        
@@ -947,7 +949,8 @@ class Account_payment_methods(models.Model):
     @api.depends('payment_total_currency', 'to_pay_amount_currency')
     def _compute_payment_difference_currency(self):
         for rec in self:
-            rec.payment_difference_currency = rec._get_payment_difference_currency() - sum(self.withholding_line_ids.mapped('amount'))             
+            rec.payment_difference_currency = rec._get_payment_difference_currency()
+            #rec.payment_difference_currency = rec._get_payment_difference_currency() - sum(self.withholding_line_ids.mapped('amount'))
     
     def _get_payment_difference_currency(self):
         return self.to_pay_amount_currency - self.payment_total_currency
