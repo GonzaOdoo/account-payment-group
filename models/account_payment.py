@@ -8,12 +8,12 @@ _logger = logging.getLogger(__name__)
 class AccountMove(models.Model):
     _inherit = "account.payment"
 
-    #multiple_payment_id = fields.Many2one(
-    #    comodel_name='account.payment.group',  # Apunta al modelo 'account.payment.multiplemethods'
-    #    string='Payment group',
+    multiple_payment_id = fields.Many2one(
+        comodel_name='account.payment.group',  # Apunta al modelo 'account.payment.multiplemethods'
+        string='Payment group',
     #    ondelete='restrict',  # Puedes cambiar esto según tus necesidades: 'cascade', 'restrict', etc.
-    #    help='Selecciona el registro de pago múltiple relacionado.'
-    #)
+        help='Selecciona el registro de pago múltiple relacionado.'
+    )
     
     amount_company_currency = fields.Monetary(
         string='Amount on Company Currency',
@@ -26,6 +26,9 @@ class AccountMove(models.Model):
         default=False,
         help="Enable manual editing of Amount on Company Currency and automatic recalculation of Exchange Rate."
 )
+    exchange_rate = fields.Float('Tasa de cambio')
+
+    other_currency = fields.Boolean('Divisa extranjera')
     @api.depends('amount', 'to_pay_move_line_ids')
     def _compute_exchange_rate(self):
         for rec in self:
@@ -88,11 +91,11 @@ class AccountMove(models.Model):
                 amount_company_currency = rec.amount * rec.exchange_rate
             rec.amount_company_currency = amount_company_currency
             
-    #def _inverse_amount_company_currency(self):
-     #   for rec in self:
-      #      if rec.amount and rec.other_currency:
-       #         rec.exchange_rate = rec.amount_company_currency / rec.amount
-        #        _logger.info(f"Exchange rate updated from manual company currency: {rec.exchange_rate}")
+    def _inverse_amount_company_currency(self):
+        for rec in self:
+            if rec.amount and rec.other_currency:
+                rec.exchange_rate = rec.amount_company_currency / rec.amount
+                _logger.info(f"Exchange rate updated from manual company currency: {rec.exchange_rate}")
     
     @api.depends('amount_company_currency','exchange_rate')
     def _compute_amount_from_dollar(self):
@@ -131,136 +134,70 @@ class AccountMove(models.Model):
          #       wth_amount = wth_amount * rec.exchange_rate
           #  rec.payment_total += wth_amount
             
-    def _prepare_witholding_write_off_vals(self):
-        self.ensure_one()
-        write_off_line_vals = []
-        conversion_rate = self.exchange_rate or 1.0
-        sign = 1
-        if self.partner_type == 'supplier':
-            sign = -1
-        for line in self.l10n_ar_withholding_line_ids:
-            _logger.info(f"Line: {str(line)}")
-            # nuestro approach esta quedando distinto al del wizard. En nuestras lineas tenemos los importes en moneda
-            # de la cia, por lo cual el line.amount aca representa eso y tenemos que convertirlo para el amount_currency
-            account_id, tax_repartition_line_id = line._tax_compute_all_helper()
-            amount_currency = self.currency_id.round(line.amount / conversion_rate)
-            line_amount = line.amount
-            if self.currency_id != self.company_currency_id:
-                amount_currency = line.amount
-                line_amount = line.amount * conversion_rate
-            write_off_line_vals.append({
-                    **self._get_withholding_move_line_default_values(),
-                    'name': line.name,
-                    'account_id': account_id,
-                    'amount_currency': sign * amount_currency,
-                    'balance': sign * line_amount,
-                    # este campo no existe mas
-                    # 'tax_base_amount': sign * line.base_amount,
-                    'tax_repartition_line_id': tax_repartition_line_id,
-            })
-            _logger.info(write_off_line_vals)
-        for base_amount in list(set(self.l10n_ar_withholding_line_ids.mapped('base_amount'))):
-            withholding_lines = self.l10n_ar_withholding_line_ids.filtered(lambda x: x.base_amount == base_amount)
-            nice_base_label = ','.join(withholding_lines.filtered('name').mapped('name'))
-            account_id = self.company_id.l10n_ar_tax_base_account_id.id
-            base_amount = sign * base_amount
-            base_amount_currency = self.currency_id.round(base_amount / conversion_rate)
-            if self.currency_id != self.company_currency_id:
-                base = base_amount
-                base_amount = base * conversion_rate
-                base_amount_currency = base
-            write_off_line_vals.append({
-                **self._get_withholding_move_line_default_values(),
-                'name': _('Base Ret: ') + nice_base_label,
-                'tax_ids': [Command.set(withholding_lines.mapped('tax_id').ids)],
-                'account_id': account_id,
-                'balance': base_amount,
-                'amount_currency': base_amount_currency,
-            })
-            write_off_line_vals.append({
-                **self._get_withholding_move_line_default_values(),  # Counterpart 0 operation
-                'name': _('Base Ret Cont: ') + nice_base_label,
-                'account_id': account_id,
-                'balance': -base_amount,
-                'amount_currency': -base_amount_currency,
-            })
-            _logger.info(write_off_line_vals)
 
-        return write_off_line_vals
-    
 
-    def _prepare_move_line_default_vals(self, write_off_line_vals=None, force_balance=None):
-
-        res = super()._prepare_move_line_default_vals(write_off_line_vals, force_balance=force_balance)
-    
-        wth_amount = sum(self.l10n_ar_withholding_line_ids.mapped('amount'))
-        wth_amount_currency = wth_amount
-        if self.currency_id != self.company_currency_id:
-            wth_amount = wth_amount * self.exchange_rate
-    
-        valid_account_types = self._get_valid_payment_account_types()
-        _logger.info(f'Preparing withholdings: {wth_amount},{wth_amount_currency}')
-
-        # 🔹 Obtener el `amount_currency` correcto de la primera línea
-        if res:
-            first_line = res[0]  # Primera línea que tiene el valor correcto
-            correct_amount_currency = first_line.get('amount_currency', 0.0)
-            correct_debit = first_line.get('debit', 0.0)
-            correct_credit = first_line.get('credit', 0.0)
-            _logger.info(f"Using amount_currency from first line: {correct_amount_currency}")
-    
-        # 🔹 Aplicar el valor correcto a todas las líneas antes de sumar la retención
-        for line in res:
-            account_id = self.env['account.account'].browse(line['account_id'])
-            if account_id.account_type in valid_account_types:
-                _logger.info(f"Corrigiendo amount_currency de {line['amount_currency']} a {correct_amount_currency}")
-                
-    
-                # 🔹 Ajustar también `debit` o `credit` con base en la línea correcta
-                _logger.info(f"Payment_type: {self.payment_type}")
-                if self.payment_type == 'inbound':
-                    line['amount_currency'] = -correct_amount_currency
-                    line['credit'] = correct_debit
-                elif self.payment_type == 'outbound':
-                    line['amount_currency'] = -correct_amount_currency
-                    line['debit'] = correct_credit
-        # Obtener líneas de retención existentes
-        withholding_vals = self._prepare_witholding_write_off_vals()
-        existing_accounts = {line['account_id']: line for line in res}
-
-        # Actualizar líneas en res sin duplicar
-        for line in withholding_vals:
-            if line['account_id'] in existing_accounts:
-                existing_accounts[line['account_id']]['balance'] = line['balance']
-                existing_accounts[line['account_id']]['amount_currency'] = line['amount_currency']
-            else:
-                res.append(line)  # Solo agrega si no existe ya
-    
-        # Ajustar montos en las líneas de pago existentes para que cuadren con las retenciones
-        for line in res:
-            account_id = self.env['account.account'].browse(line['account_id'])
-            
-            if account_id.account_type in valid_account_types:
-                _logger.info(f'Line to add: {str(line)}')
-                if self.payment_type == 'inbound':
-                    line['credit'] += wth_amount
-                    line['amount_currency'] -= wth_amount_currency
-                elif self.payment_type == 'outbound':
-                    line['debit'] += wth_amount
-                    line['amount_currency'] += wth_amount_currency
-                
-            _logger.info(f'Final line: {str(line)}')
-        return res
-        
     #@api.depends('l10n_ar_withholding_line_ids.amount')
-    def _compute_withholdings_amount(self):
-        for rec in self:
-            total_withholdings = sum(rec.l10n_ar_withholding_line_ids.mapped('amount'))
-            if rec.currency_id == rec.company_currency_id: 
-                rec.withholdings_amount = total_withholdings
-            else:
-                rec.withholdings_amount = total_withholdings * rec.exchange_rate
-            rec.withholdings_amount = total_withholdings
+    #def _compute_withholdings_amount(self):
+    #    for rec in self:
+    #        total_withholdings = sum(rec.l10n_ar_withholding_line_ids.mapped('amount'))
+    #        if rec.currency_id == rec.company_currency_id: 
+    #            rec.withholdings_amount = total_withholdings
+    #        else:
+    #            rec.withholdings_amount = total_withholdings * rec.exchange_rate
+    #        rec.withholdings_amount = total_withholdings
             
  
-        
+    @api.depends("l10n_ar_fiscal_position_id", "partner_id", "company_id", "date")
+    def _compute_l10n_ar_withholding_line_ids(self):
+        _logger.info("Override!")
+        if self.env.context.get('skip_ar_withholdings'):
+            for wizard in self:
+                wizard.l10n_ar_withholding_ids = [Command.clear()]
+            return
+        earnings_tax = self.env["account.tax"].search([
+            ("l10n_ar_tax_type", "=", "earnings")
+        ], limit=1)
+    
+        for rec in self.filtered(lambda x: x.partner_type == "supplier"):
+    
+            date = rec.date or fields.Date.context_today(rec)
+    
+            withholdings = [Command.clear()]
+    
+            taxes = self.env["account.tax"]
+    
+            # -------------------------------------------------
+            # Taxes desde posición fiscal
+            # -------------------------------------------------
+            if rec.l10n_ar_fiscal_position_id.l10n_ar_tax_ids:
+                taxes |= rec.l10n_ar_fiscal_position_id._l10n_ar_add_taxes(
+                    rec.partner_id,
+                    rec.company_id,
+                    date,
+                    "withholding",
+                    rec,
+                )
+    
+            # -------------------------------------------------
+            # Agregar ganancias automáticamente
+            # -------------------------------------------------
+            partner = rec.partner_id
+    
+            if (
+                partner.default_regimen_ganancias_id
+                and partner.imp_ganancias_padron in ["AC", "NI", "EX"]
+            ):
+                taxes |= earnings_tax
+    
+            # evitar duplicados
+            taxes = taxes.sorted(key=lambda x: x.id)
+    
+            # crear líneas
+            withholdings += [
+                Command.create({
+                    "tax_id": tax.id,
+                })
+                for tax in taxes
+            ]
+    
+            rec.l10n_ar_withholding_line_ids = withholdings

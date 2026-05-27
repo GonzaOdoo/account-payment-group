@@ -3,9 +3,17 @@ from odoo.exceptions import ValidationError, UserError
 from collections import defaultdict
 from odoo.tools import frozendict
 import pprint
+import stdnum
 import logging
 
 _logger = logging.getLogger(__name__)
+CHECK_PAYMENT_CODES = [
+    'in_third_party_checks',
+    'out_third_party_checks',
+    'return_third_party_checks',
+    'new_third_party_checks',
+    'own_checks',
+]
 
 class CustomAccountPaymentRegister(models.TransientModel):
     _name = 'custom.account.payment.register'
@@ -25,10 +33,11 @@ class CustomAccountPaymentRegister(models.TransientModel):
         copy=False,
         check_company=True,
     )
-    #l10n_latam_manual_checks = fields.Boolean(
-    #    related='journal_id.l10n_latam_manual_checks',
-    #)
-    #l10n_latam_check_bank_id = fields.Many2one()
+    l10n_latam_manual_checks = fields.Boolean(
+        related='journal_id.check_manual_sequencing',
+    )
+    l10n_latam_check_issuer_vat = fields.Char("Issuer vat")
+    l10n_latam_check_bank_id = fields.Boolean("Check bank id")
     payment_method_code = fields.Char(
         related='payment_method_line_id.code')
     
@@ -52,6 +61,14 @@ class CustomAccountPaymentRegister(models.TransientModel):
         compute='_compute_draft_check_ids',
         string="Cheques en borrador en este grupo"
     )
+    l10n_latam_new_check_ids = fields.One2many('l10n_latam.payment.register.check', 'payment_custom_register_id', string="New Checks")
+    l10n_latam_move_check_ids = fields.Many2many(
+        comodel_name='l10n_latam.check',
+        string='Checks',
+    )
+    l10n_ar_withholding_ids = fields.One2many(
+        'custom.l10n_ar.payment.register.withholding', 'custom_payment_register_id', string="Withholdings", readonly=False, store=True)
+
 
     @api.depends('multiple_payment_id')
     def _compute_draft_check_ids(self):
@@ -61,9 +78,9 @@ class CustomAccountPaymentRegister(models.TransientModel):
                 payments = self.env['account.payment'].search([
                     ('multiple_payment_id', '=', record.multiple_payment_id.id),
                     ('state', '=', 'draft'),  # Solo pagos en borrador
-                    ('l10n_latam_check_id', '!=', False)  # Solo pagos que ya tienen un cheque asignado
+                    ('l10n_latam_move_check_ids', '!=', False)  # Solo pagos que ya tienen un cheque asignado
                 ])
-                record.draft_check_ids = [(6, 0, payments.mapped('l10n_latam_check_id').ids)]
+                record.draft_check_ids = [(6, 0, payments.mapped('l10n_latam_move_check_ids').ids)]
             else:
                 record.draft_check_ids = [(5, 0, 0)]  # Vacía el campo si no hay grupo
     @api.model
@@ -75,11 +92,39 @@ class CustomAccountPaymentRegister(models.TransientModel):
         return record
         
     
-    @api.depends('l10n_latam_check_id')
+    @api.depends(
+        'payment_method_code',
+        'l10n_latam_move_check_ids.amount',
+        'l10n_latam_new_check_ids.amount',
+    )
     def _compute_amount(self):
         for wizard in self:
+    
+            # ---------------------------------------------------------
+            # CHEQUES
+            # ---------------------------------------------------------
+            if wizard.payment_method_code in CHECK_PAYMENT_CODES:
+    
+                # cheques nuevos
+                if wizard.payment_method_code in['new_third_party_checks','own_checks']:
+                    wizard.amount = sum(
+                        wizard.l10n_latam_new_check_ids.mapped('amount')
+                    )
+    
+                # cheques existentes
+                else:
+                    wizard.amount = sum(
+                        wizard.l10n_latam_move_check_ids.mapped('amount')
+                    )
+    
+                continue
+    
+            # ---------------------------------------------------------
+            # CHEQUE MANUAL
+            # ---------------------------------------------------------
             if wizard.l10n_latam_check_id:
-                wizard.amount = wizard.l10n_latam_check_id.amount  # Si hay cheque, usa su monto
+                wizard.amount = wizard.l10n_latam_check_id.amount
+    
             elif not wizard.amount:
                 if wizard.amount_received > 0:
                     wizard.amount = wizard.amount_received
@@ -98,15 +143,19 @@ class CustomAccountPaymentRegister(models.TransientModel):
         """
         #raise UserError(pprint.pformat(to_process))
         payments = self.env['account.payment']\
-            .with_context(skip_invoice_sync=True)\
+            .with_context(skip_invoice_sync=True,skip_ar_withholdings=True)\
             .create([x['create_vals'] for x in to_process])
- 
+        for payment in payments:
+            _logger.info("Estado de pago")
+            payment.write({'state':'draft'})
+            _logger.info(payment.state)
         return payments
 
    
     
     def _create_payment_vals_from_wizard(self):
             payment_vals = {
+                'state':'draft',
                 'date': self.payment_date,
                 'amount': self.amount,
                 'payment_type': self.payment_type,
@@ -119,11 +168,27 @@ class CustomAccountPaymentRegister(models.TransientModel):
                 'payment_method_line_id': self.payment_method_line_id.id,
                 #'destination_account_id': self.line_ids[0].account_id.id,
                 'write_off_line_vals': [],
-                'l10n_latam_check_number':self.l10n_latam_check_number,
-                'l10n_latam_check_payment_date':self.l10n_latam_check_payment_date,
-                'l10n_latam_check_id':self.l10n_latam_check_id.id,
-                'l10n_latam_check_bank_id':self.l10n_latam_check_bank_id.id,
-                'l10n_latam_check_issuer_vat':self.l10n_latam_check_issuer_vat,
+                'l10n_latam_new_check_ids': [
+                    Command.create({
+                        'amount': check.amount,
+                        'name': check.name,
+                        #'owner_name': check.owner_name,
+                        'bank_id': check.bank_id.id,
+                        'payment_date': check.payment_date,
+                        #'date': check.date,
+                        'currency_id': check.currency_id.id,
+                        'is_echeck': check.is_echeck,
+                    })
+                    for check in self.l10n_latam_new_check_ids
+                ],
+                'l10n_latam_move_check_ids': [
+                    Command.set(self.l10n_latam_move_check_ids.ids)
+                ],
+                #'l10n_latam_check_number':self.l10n_latam_check_number,
+                #'l10n_latam_check_payment_date':self.l10n_latam_check_payment_date,
+                #'l10n_latam_check_id':self.l10n_latam_check_id.id,
+                #'l10n_latam_check_bank_id':self.l10n_latam_check_bank_id.id,
+                #'l10n_latam_check_issuer_vat':self.l10n_latam_check_issuer_vat,
                 'multiple_payment_id':self.multiple_payment_id.id,
                 'amount_company_currency':self.amount * self.exchange_rate,
                 'manual_company_currency':True
@@ -289,20 +354,20 @@ class CustomAccountPaymentRegister(models.TransientModel):
                     wizard.partner_bank_id = None
             else:
                 wizard.partner_bank_id = None
-    @api.depends('can_edit_wizard', 'amount')
-    def _compute_payment_difference(self):
-        for wizard in self:
-            if wizard.can_edit_wizard and wizard.payment_date:
-                batches = wizard._get_batches()
-                if batches:
-                    batch_result = batches[0]
-                    total_amount_residual_in_wizard_currency = wizard\
-                        ._get_total_amount_in_wizard_currency_to_full_reconcile(batch_result, early_payment_discount=False)[0]
-                    wizard.payment_difference = total_amount_residual_in_wizard_currency - wizard.amount
-                else:
-                    wizard.payment_difference = 0.0
-            else:
-                wizard.payment_difference = 0.0
+    #@api.depends('can_edit_wizard', 'amount')
+    #def _compute_payment_difference(self):
+    #    for wizard in self:
+    #        if wizard.can_edit_wizard and wizard.payment_date:
+    #            batches = wizard._get_batches()
+    #            if batches:
+    #                batch_result = batches[0]
+    #                total_amount_residual_in_wizard_currency = wizard\
+    #                    ._get_total_amount_in_wizard_currency_to_full_reconcile(batch_result, early_payment_discount=False)[0]
+    #                wizard.payment_difference = total_amount_residual_in_wizard_currency - wizard.amount
+    #            else:
+    #                wizard.payment_difference = 0.0
+    #        else:
+    #            wizard.payment_difference = 0.0
                 
     @api.depends('payment_type', 'company_id', 'can_edit_wizard')
     def _compute_available_journal_ids(self):
@@ -322,20 +387,36 @@ class CustomAccountPaymentRegister(models.TransientModel):
 
 
 
-    @api.depends('can_edit_wizard', 'payment_date', 'currency_id', 'amount')
-    def _compute_early_payment_discount_mode(self):
-        for wizard in self:
-            if not wizard.journal_id or not wizard.currency_id or not wizard.payment_date:
-                wizard.early_payment_discount_mode = wizard.early_payment_discount_mode
-            elif wizard.can_edit_wizard:
-                batches = wizard._get_batches()
-                if batches:
-                    batch_result = wizard._get_batches()[0]
-                    total_amount_residual_in_wizard_currency, mode = wizard._get_total_amount_in_wizard_currency_to_full_reconcile(batch_result)
-                    wizard.early_payment_discount_mode = \
-                        wizard.currency_id.compare_amounts(wizard.amount, total_amount_residual_in_wizard_currency) == 0 \
-                        and mode == 'early_payment'
-                else:
-                    wizard.early_payment_discount_mode = False
-            else:
-                wizard.early_payment_discount_mode = False
+    #@api.depends('can_edit_wizard', 'payment_date', 'currency_id', 'amount')
+    #def _compute_early_payment_discount_mode(self):
+    #    for wizard in self:
+    #        if not wizard.journal_id or not wizard.currency_id or not wizard.payment_date:
+    #            wizard.early_payment_discount_mode = wizard.early_payment_discount_mode
+    #        elif wizard.can_edit_wizard:
+    #            batches = wizard._get_batches()
+    #            if batches:
+    #                batch_result = wizard._get_batches()[0]
+    #                total_amount_residual_in_wizard_currency = wizard._get_total_amounts_to_pay(wizard.batches)
+    #                wizard.early_payment_discount_mode = \
+    #                    wizard.currency_id.compare_amounts(wizard.amount, total_amount_residual_in_wizard_currency) == 0 \
+    #                    and mode == 'early_payment'
+    #            else:
+    #                wizard.early_payment_discount_mode = False
+    #        else:
+    #            wizard.early_payment_discount_mode = False
+
+    def _compute_l10n_ar_withholding_ids(self):
+        return
+
+class L10n_LatamPaymentRegisterCheck(models.TransientModel):
+    _inherit = 'l10n_latam.payment.register.check'
+    
+    payment_custom_register_id = fields.Many2one('custom.account.payment.register', required=False, ondelete='cascade')
+    payment_register_id = fields.Many2one('account.payment.register', required=False, ondelete='cascade')
+
+
+class L10n_ArPaymentRegisterWithholding(models.TransientModel):
+    _name = 'custom.l10n_ar.payment.register.withholding'
+
+    custom_payment_register_id = fields.Many2one('custom.account.payment.register', required=False, ondelete='cascade')
+    amount = fields.Float("Monto")

@@ -149,7 +149,7 @@
                                 </field>
                             </page>
                             <page string="Retenciones"  invisible="state not in ['draft','posted','cancelled'] or partner_type == 'customer'">
-                                <!--<field name="withholding_line_ids" nolabel="1" colspan="2" readonly="state != 'draft'">
+                                <field name="withholding_line_ids" nolabel="1" colspan="2" readonly="state != 'draft'">
                                     <list editable="bottom">
                                         <field name="withholding_sequence_id" column_invisible="True"/>
                                         <field name="company_id" column_invisible="True"/>
@@ -162,7 +162,7 @@
                                         <button name="378" icon="fa-print " title="Print withholding voucher" type="action" invisible="parent.partner_type != 'supplier' or parent.state == 'draft'"/>
                                         <button type="object" name="get_formview_action" icon="fa-pencil-square-o" title="open" help="Open"/>
                                     </list>
-                                </field>-->
+                                </field>
                             </page>
                             
                             <page string="Pagado" invisible="state != 'posted'">

@@ -26,6 +26,9 @@
     }, 
     "depends": [
         "account",
+        "l10n_ar_withholding",
+        "l10n_latam_check",
+        "l10n_ar_tax",
         "account_payment_pro",
     ],
 

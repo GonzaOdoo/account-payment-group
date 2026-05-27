@@ -16,16 +16,16 @@ class Account_payment_methods(models.Model):
         default=fields.Date.context_today,  # Asigna el día actual por defecto
     )
     currency_id = fields.Many2one(
-    'res.currency',
-    string='Divisa',
-    compute='_compute_currency_id',
-    store=True,
-    tracking=True,
-    required=True,
-    default=lambda self: self.env.company.currency_id,
-    readonly = False
-)
-    
+        'res.currency',
+        string='Divisa',
+        compute='_compute_currency_id',
+        store=True,
+        tracking=True,
+        required=True,
+        default=lambda self: self.env.company.currency_id,
+        readonly = False
+    )
+        
         
     company_id = fields.Many2one(
         comodel_name='res.company',
@@ -75,10 +75,9 @@ class Account_payment_methods(models.Model):
         string='Pagos no conciliados',
         domain="[('partner_id', '=', partner_id), ('state', '!=', 'reconciled'), ('partner_type', 'in', ['customer', 'supplier'])]"
     )
-    #withholding_line_ids = fields.One2many(
-        #'account.tax', string='Withholdings Lines',
-        # compute='_compute_l10n_ar_withholding_line_ids', readonly=False, store=True
-    #)
+    withholding_line_ids = fields.One2many(
+        'l10n_ar.payment.withholding', inverse_name='multiple_payment_id', string='Withholdings Lines', readonly=False, store=True
+    )
     matched_move_line_ids = fields.Many2many(
         'account.move.line',
         compute='_compute_matched_move_line_ids',
@@ -253,20 +252,35 @@ class Account_payment_methods(models.Model):
         string='Ajuste / Avance',
         currency_field='currency_id',
     )
+    fiscal_position_id = fields.Many2one(
+        'account.fiscal.position',
+        string='Posición Fiscal',
+        tracking=True,
+    )
+
+    @api.onchange('partner_id')
+    def _onchange_partner_id(self):
+        for rec in self:
+            rec.fiscal_position_id = (
+                rec.partner_id.property_account_position_id
+            )
 
     @api.depends('to_pay_move_line_ids')
     def _compute_is_advanced_payment(self):
         for rec in self:
             rec.is_advanced_payment = not bool(rec.to_pay_move_line_ids)
     
-    @api.depends('to_pay_move_line_ids')
+    @api.depends('to_pay_move_line_ids', 'company_id')
     def _compute_currency_id(self):
         for rec in self:
             if rec.to_pay_move_line_ids:
                 first_line_currency = rec.to_pay_move_line_ids[0].currency_id
-                rec.currency_id = first_line_currency or rec.company_currency_id
+                rec.currency_id = (
+                    first_line_currency
+                    or rec.company_id.currency_id
+                )
             else:
-                rec.currency_id = rec.company_currency_id
+                rec.currency_id = rec.company_id.currency_id
     
     @api.depends('partner_type')
     def _compute_payment_type(self):
@@ -435,10 +449,7 @@ class Account_payment_methods(models.Model):
     def _compute_commercial_partner_id(self):
         for record in self:
             record.commercial_partner_id = record.partner_id.commercial_partner_id
-    @api.depends('company_id')
-    def _compute_currency_id(self):
-        for record in self:
-            record.company_currency_id = record.company_id.currency_id
+
             
     @api.depends('to_pay_move_line_ids', 'to_pay_move_line_ids.amount_residual')
     def _compute_selected_debt(self):
@@ -712,21 +723,52 @@ class Account_payment_methods(models.Model):
 
     ###RETENCIONES
     def _compute_withholdings(self):
-        # chequeamos lineas a pagar antes de computar impuestos para evitar trabajar sobre base erronea
+    
         self._check_to_pay_lines_account()
+    
         for rec in self:
-
+    
             if rec.partner_type != 'supplier':
                 continue
-            # limpiamos el type por si se paga desde factura ya que el en ese
-            # caso viene in_invoice o out_invoice y en search de tax filtrar
-            # por impuestos de venta y compra (y no los nuestros de pagos
-            # y cobros)
-            taxes = self.env['account.tax'].with_context(type=None).search([
-                    ('type_tax_use', '=', 'none'),
-                    ('l10n_ar_withholding_payment_type', '=', rec.partner_type),
-                    ('company_id', '=', rec.company_id.id),
-                ])
+    
+            taxes = self.env['account.tax']
+    
+            # ---------------------------------------------------------
+            # GANANCIAS
+            # ---------------------------------------------------------
+            earnings_tax = self.env['account.tax'].search([
+                ('type_tax_use', '=', 'none'),
+                ('l10n_ar_tax_type', 'in', ['earnings', 'earnings_scale']),
+                ('l10n_ar_withholding_payment_type', '=', 'supplier'),
+                ('company_id', '=', rec.company_id.id),
+            ], limit=1)
+    
+            if earnings_tax:
+                taxes |= earnings_tax
+    
+            # ---------------------------------------------------------
+            # FISCAL POSITION
+            # ---------------------------------------------------------
+            if rec.fiscal_position_id:
+    
+                date = rec.date or fields.Date.context_today(rec)
+    
+                fiscal_taxes = (
+                    rec.fiscal_position_id._l10n_ar_add_taxes(
+                        rec.partner_id,
+                        rec.company_id,
+                        date,
+                        "withholding",
+                        rec,
+                    )
+                )
+    
+                taxes |= fiscal_taxes.filtered(
+                    lambda t:
+                        t.type_tax_use == 'none'
+                        and t.l10n_ar_withholding_payment_type == 'supplier'
+                )
+    
             rec._upadte_withholdings(taxes)
             
 
@@ -772,72 +814,115 @@ class Account_payment_methods(models.Model):
                 rec._compute_withholdings()
             rec.with_context(skip_account_move_synchronization=False)._synchronize_to_moves({'l10n_ar_withholding_line_ids'})
 
+    def _get_withholding_rate(self):
+        return 1
+
     def _upadte_withholdings(self, taxes):
         self.ensure_one()
+    
         commands = []
         withholding_details = []
+    
+        currency = self.company_currency_id
+    
         for tax in taxes:
-            if (
-                    tax.withholding_user_error_message and
-                    tax.withholding_user_error_domain):
-                try:
-                    domain = literal_eval(tax.withholding_user_error_domain)
-                except Exception as e:
-                    raise ValidationError(_(
-                        'Could not eval rule domain "%s".\n'
-                        'This is what we get:\n%s' % (tax.withholding_user_error_domain, e)))
-                domain.append(('id', '=', self.id))
-                if self.search(domain):
-                    raise ValidationError(tax.withholding_user_error_message)
-            vals = tax.get_withholding_vals(self)
-
-            # we set computed_withholding_amount, hacemos round porque
-            # si no puede pasarse un valor con mas decimales del que se ve
-            # y terminar dando error en el asiento por debitos y creditos no
-            # son iguales, algo parecido hace odoo en el compute_all de taxes
-            currency = self.company_currency_id
-            period_withholding_amount = currency.round(vals.get('period_withholding_amount', 0.0))
-            previous_withholding_amount = currency.round(vals.get('previous_withholding_amount'))
-            # withholding can not be negative
-            computed_withholding_amount = max(0, (period_withholding_amount - previous_withholding_amount))
-
-            payment_withholding = self.withholding_line_ids.filtered(lambda x: x.tax_id == tax)
-            if not computed_withholding_amount:
-                # if on refresh no more withholding, we delete if it exists
-                if payment_withholding:
-                    commands.append(Command.delete(payment_withholding.id))
+    
+            existing_withholding = self.withholding_line_ids.filtered(
+                lambda x: x.tax_id == tax
+            )
+    
+            # ---------------------------------------------------------
+            # CREATE REAL RECORD TEMPORARILY
+            # ---------------------------------------------------------
+            withholding = existing_withholding
+    
+            if not withholding:
+                withholding = self.env[
+                    'l10n_ar.payment.withholding'
+                ].create({
+                    'multiple_payment_id': self.id,
+                    'tax_id': tax.id,
+                })
+    
+            # ---------------------------------------------------------
+            # FORCE COMPUTES
+            # ---------------------------------------------------------
+            withholding._compute_base_amount()
+            withholding._compute_amount()
+            _logger.info(withholding.amount)
+            amount = currency.round(
+                max(0.0, withholding.amount)
+            )
+    
+            base_amount = currency.round(
+                withholding.base_amount
+            )
+    
+            ref = withholding.ref
+    
+            # ---------------------------------------------------------
+            # DELETE IF ZERO
+            # ---------------------------------------------------------
+            if currency.is_zero(amount):
+    
+                if existing_withholding:
+                    commands.append(
+                        Command.delete(existing_withholding.id)
+                    )
+                else:
+                    withholding.unlink()
+    
                 continue
-
-            # we copy withholdable_base_amount on base_amount
-            # al final vimos con varios clientes que este monto base
-            # debe ser la base imponible de lo que se está pagando en este
-            # voucher
-            vals['base_amount'] = vals.get('withholdable_advanced_amount') + vals.get('withholdable_invoiced_amount')
-            vals['amount'] = computed_withholding_amount
-            vals['computed_withholding_amount'] = computed_withholding_amount
-
-            # por ahora no imprimimos el comment, podemos ver de llevarlo a
-            # otro campo si es de utilidad
-            vals.pop('comment')
-            if payment_withholding:
-                commands.append(Command.update(payment_withholding.id, vals))
-                # payment_withholding.write(vals)
-            else:
-                # TODO implementar devoluciones de retenciones
-                # TODO en vez de pasarlo asi usar un command create
-                vals['multiple_payment_id'] = self.id
-                commands.append(Command.create(vals))
-            withholding_details.append(f"{tax.name}, Monto: {computed_withholding_amount:.2f}")
-        self.withholding_line_ids = commands
-        # Enviar mensaje al chatter con los detalles de las retenciones creadas o actualizadas
-        if withholding_details:
-            for witholding in withholding_details:
-                self.message_post(
-                    body=witholding,
-                    subject="Cálculo de Retenciones",
-                    message_type='comment',
-                    subtype_xmlid='mail.mt_comment', 
+    
+            vals = {
+                'base_amount': base_amount,
+                'amount': amount,
+                'ref': ref,
+            }
+    
+            # ---------------------------------------------------------
+            # UPDATE / KEEP
+            # ---------------------------------------------------------
+            if existing_withholding:
+    
+                commands.append(
+                    Command.update(
+                        existing_withholding.id,
+                        vals,
+                    )
                 )
+    
+            else:
+                withholding.write(vals)
+    
+            detail = (
+                f"{tax.name}, "
+                f"Base: {base_amount:.2f}, "
+                f"Retención: {amount:.2f}"
+            )
+    
+            if ref:
+                detail += f"<br/><small>{ref}</small>"
+    
+            withholding_details.append(detail)
+    
+        # ---------------------------------------------------------
+        # APPLY COMMANDS
+        # ---------------------------------------------------------
+        if commands:
+            self.withholding_line_ids = commands
+    
+        # ---------------------------------------------------------
+        # CHATTER
+        # ---------------------------------------------------------
+        for detail in withholding_details:
+            self.message_post(
+                body=detail,
+                subject="Cálculo de Retenciones",
+                message_type='comment',
+                subtype_xmlid='mail.mt_comment',
+            )
+                    
     def _check_to_pay_lines_account(self):
         """ TODO ver si esto tmb lo llevamos a la UI y lo mostramos como un warning.
         tmb podemos dar mas info al usuario en el error """
@@ -1024,4 +1109,27 @@ class Account_payment_methods(models.Model):
             'view_id': self.env.ref('account-payment-group.view_account_payment_selection_wizard').id,  # Reemplaza con el ID de la vista del wizard
             'target': 'new',
             'context': {'default_payment_group_id': self.id},
+        }
+
+    def _get_earnings_withholding_vals(self, tax):
+        self.ensure_one()
+    
+        withholding = self.env['l10n_ar.payment.withholding'].new({
+            'payment_id': False,
+            'multiple_payment_id': self.id,
+            'tax_id': tax.id,
+        })
+    
+        withholding._compute_base_amount()
+    
+        amount, __, __, ref = withholding._tax_compute_all_helper()
+    
+        return {
+            'tax_id': tax.id,
+            'base_amount': withholding.base_amount,
+            'amount': amount,
+            #'computed_withholding_amount': amount,
+            'comment': ref,
+            #'withholdable_advanced_amount': 0.0,
+            #'withholdable_invoiced_amount': withholding.base_amount,
         }
