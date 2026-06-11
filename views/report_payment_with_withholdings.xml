@@ -84,80 +84,80 @@
                                 </td>
                             </tr>
                         </t>
-                        <t t-foreach="o.to_pay_payment_ids" t-as="payment">
-
-    <t t-if="payment.l10n_latam_new_check_ids or payment.l10n_latam_move_check_ids">
-
-        <!-- Cheques propios -->
-        <t t-foreach="payment.l10n_latam_new_check_ids" t-as="check">
-            <t t-set="amount" t-value="amount + check.amount"/>
-
-            <tr>
-                <td>Cheque propio</td>
-                <td>
-                    <span t-field="payment.payment_method_line_id"/>
-                </td>
-                <td>
-                    <span t-field="check.name"/>
-                </td>
-                <td>
-                    <span t-field="check.payment_date"/>
-                </td>
-                <td class="text-right o_price_total">
-                    <span t-field="check.amount"/>
-                </td>
-            </tr>
-        </t>
-
-        <!-- Cheques de terceros -->
-        <t t-foreach="payment.l10n_latam_move_check_ids" t-as="check">
-            <t t-set="amount" t-value="amount + check.amount"/>
-
-            <tr>
-                <td>Cheque tercero</td>
-                <td>
-                    <span t-field="payment.payment_method_line_id"/>
-                </td>
-                <td>
-                    <span t-field="check.name"/>
-                </td>
-                <td>
-                    <span t-field="check.payment_date"/>
-                </td>
-                <td class="text-right o_price_total">
-                    <span t-field="check.amount"/>
-                </td>
-            </tr>
-        </t>
-
-    </t>
-
-    <t t-else="">
-        <!-- Pago normal (efectivo, transferencia, etc.) -->
-
-        <t t-set="amount" t-value="amount + payment.amount"/>
-
-        <tr>
-            <td>
-                <span t-if="payment.journal_id.id == 153">Efectivo</span>
-                <span t-if="payment.journal_id.id != 153" t-field="payment.journal_id.name"/>
-            </td>
-
-            <td>
-                <span t-if="payment.payment_method_line_id" t-field="payment.payment_method_line_id"/>
-                <span t-if="not payment.payment_method_line_id">-</span>
-            </td>
-
-            <td/>
-            <td/>
-            <td class="text-right o_price_total">
-                <span class="text-nowrap" t-field="payment.amount"/>
-            </td>
-        </tr>
-
-    </t>
-
-</t>
+  <t t-if="payment.l10n_latam_new_check_ids or payment.l10n_latam_move_check_ids">
+                    
+                            <!-- Cheques propios -->
+                            <t t-foreach="payment.l10n_latam_new_check_ids" t-as="check">
+                                <t t-set="amount" t-value="amount + check.amount"/>
+                    
+                                <tr>
+                                    <td>Cheque propio</td>
+                                    <td>
+                                        <span t-field="payment.payment_method_line_id"/>
+                                    </td>
+                                    <td>
+                                        <span t-field="check.name"/>
+                                    </td>
+                                    <td>
+                                        <span t-field="check.payment_date"/>
+                                    </td>
+                                    <td class="text-right o_price_total">
+                                        <span t-field="check.amount"/>
+                                    </td>
+                                </tr>
+                            </t>
+                    
+                            <!-- Cheques de terceros -->
+                            <t t-foreach="payment.l10n_latam_move_check_ids" t-as="check">
+                                <t t-set="amount" t-value="amount + check.amount"/>
+                    
+                                <tr>
+                                    <td>Cheque tercero</td>
+                                    <td>
+                                        <span t-field="payment.payment_method_line_id"/>
+                                    </td>
+                                    <td>
+                                        <span t-field="check.name"/>
+                                    </td>
+                                    <td>
+                                        <span t-field="check.payment_date"/>
+                                    </td>
+                                    <td class="text-right o_price_total">
+                                        <span t-field="check.amount"/>
+                                    </td>
+                                </tr>
+                            </t>
+                    
+                        </t>
+                    
+                        <t t-else="">
+                            <!-- Pago normal (efectivo, transferencia, etc.) -->
+                    
+                            <t t-set="amount" t-value="amount + payment.amount"/>
+                    
+                            <tr>
+                                <td>
+                                    <span t-if="payment.journal_id.id == 153">Efectivo</span>
+                                    <span t-if="payment.journal_id.id != 153"
+                                          t-field="payment.journal_id.name"/>
+                                </td>
+                    
+                                <td>
+                                    <span t-if="payment.payment_method_line_id"
+                                          t-field="payment.payment_method_line_id"/>
+                                    <span t-if="not payment.payment_method_line_id">-</span>
+                                </td>
+                    
+                                <td/>
+                                <td/>
+                                <td class="text-right o_price_total">
+                                    <span class="text-nowrap" t-field="payment.amount"/>
+                                </td>
+                            </tr>
+                    
+                        </t>
+                    
+                    </t>
     
                     </tbody>
                     <tfoot>

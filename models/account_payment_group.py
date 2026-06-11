@@ -189,7 +189,7 @@ class Account_payment_methods(models.Model):
         store=True,  # Si lo necesitas en búsquedas o reportes
     )
     withholdings_amount = fields.Monetary(
-        #compute='_compute_withholdings_amount',
+        compute='_compute_withholdings_amount',
         string='Retenciones',
         currency_field='currency_id'
     )
@@ -368,15 +368,15 @@ class Account_payment_methods(models.Model):
     @api.depends('amount_company_currency_signed_pro')
     def _compute_payment_total(self):
         for rec in self:
-            rec.payment_total = rec.amount_company_currency_signed_pro
-            #rec.payment_total = rec.amount_company_currency_signed_pro + sum(rec.withholding_line_ids.mapped('amount'))
+            #rec.payment_total = rec.amount_company_currency_signed_pro
+            rec.payment_total = rec.amount_company_currency_signed_pro + sum(rec.withholding_line_ids.mapped('amount'))
     
 
             
-    #@api.depends('withholding_line_ids.amount')
-    #def _compute_withholdings_amount(self):
-    #    for rec in self:
-    #        rec.withholdings_amount = sum(rec.withholding_line_ids.mapped('amount'))
+    @api.depends('withholding_line_ids.amount')
+    def _compute_withholdings_amount(self):
+        for rec in self:
+            rec.withholdings_amount = sum(rec.withholding_line_ids.mapped('amount'))
         
         
     @api.depends('to_pay_payment_ids')
@@ -509,7 +509,7 @@ class Account_payment_methods(models.Model):
             'type': 'ir.actions.act_window',
             'name': 'Conciliaciones y Líneas de Pago',
             'res_model': 'account.move.line',
-            'view_mode': 'tree,form',
+            'view_mode': 'list,form',
             'domain': [('id', 'in', reconciled_lines.ids)],
             'target': 'current',
             'context': self.env.context,
@@ -566,7 +566,7 @@ class Account_payment_methods(models.Model):
         if not self.is_advanced_payment:
             self.ensure_one()
         # Crear el asistente y llenar line_ids con to_pay_move_line_ids
-        amount_to_send = self.payment_difference
+        amount_to_send = self.payment_difference_currency
         if self.currency_id != self.company_currency_id:
             amount_to_send = self.payment_difference_currency
         payment_register = self.env['custom.account.payment.register'].create({
@@ -659,66 +659,96 @@ class Account_payment_methods(models.Model):
     def action_reconcile_payments(self):
         self.ensure_one()
         
-        invoices = self.to_pay_move_line_ids.filtered(lambda line: not line.reconciled).sorted(key=lambda line: line.date)
+        # 1. Obtener TODAS las líneas no reconciliadas primero
+        all_unreconciled_lines = self.to_pay_move_line_ids.filtered(lambda line: not line.reconciled)
+        
+        # 2. Filtrar FACTURAS (documentos originales por cobrar/pagar)
+        invoices = all_unreconciled_lines.filtered(
+            lambda line: line.move_id.move_type in ('out_invoice', 'out_refund', 'in_invoice', 'in_refund')
+        ).sorted(key=lambda line: line.date)
+        
+        # 3. Filtrar LÍNEAS DE CRÉDITO (notas de crédito, pagos anticipados)
+        credit_lines = all_unreconciled_lines.filtered(
+            lambda line: (self.partner_type == 'customer' and line.amount_residual < 0) or  # Créditos de cliente
+             (self.partner_type == 'supplier' and line.amount_residual > 0)   # Créditos de proveedor
+        )
+        
         payments = self.to_pay_payment_ids.filtered(lambda payment: payment.state == 'draft')
-
-        credit_lines = self.to_pay_move_line_ids.filtered(lambda line: line.amount_residual > 0)
-        _logger.info(f"Lines: {credit_lines}---{invoices}")
-
+        
         if self.is_advanced_payment:
             for payment in payments:
+                if payment == payments[0] and self.withholding_line_ids:
+                    payment.l10n_ar_withholding_line_ids = [(6, 0, self.withholding_line_ids.ids)]
                 payment.action_post()
         else:
             if not invoices or not payments:
                 raise UserError("No hay facturas o pagos pendientes para conciliar.")
-            first_payment = True  # Variable para marcar el primer pago
-            # Conciliar secuencialmente
+            
+            # 1. Primero conciliar créditos con facturas
+            self._reconcile_credits_first(credit_lines, invoices)
+            
+            # 2. Obtener facturas NO RECONCILIADAS después de aplicar créditos
+            remaining_invoices = invoices.filtered(lambda line: not line.reconciled)
+            _logger.info(f"Facturas pendientes después de créditos: {remaining_invoices.mapped('amount_residual')}")
+            
+            # 3. Procesar pagos solo con facturas no reconciliadas
             for payment in payments:
                 remaining_amount = payment.amount
-                if first_payment and self.withholding_line_ids:
-                    payment.write({
-                            'l10n_ar_withholding_line_ids': [(5, 0, 0)]
-                        })
-                    payment.write({
-                        'l10n_ar_withholding_line_ids': [(4, tax.id) for tax in self.withholding_line_ids]
-                    })
-                    first_payment = False
-                for invoice_line in invoices:
-                    for credit in credit_lines:
-                         _logger.info(f"Credit:{credit}")
-                         payment.write({'to_pay_move_line_ids': [(4, credit.id)]})
-                             
-                    invoice_balance = invoice_line.amount_residual
-                    invoice_remaining = invoice_balance
-                    if payment.partner_type == 'customer' and payment.payment_type == 'inbound':
-                        # Lógica específica para pagos de clientes
-                        invoice_balance = invoice_line.amount_residual
-                        if invoice_balance > 0:
-                            payment.write({'to_pay_move_line_ids': [(4, invoice_line.id)]})
-                            amount_to_reconcile = min(remaining_amount, invoice_balance)
-                            remaining_amount -= amount_to_reconcile
-                    elif payment.partner_type == 'supplier' and payment.payment_type == 'outbound':
-                        # Lógica específica para pagos de proveedores
-                        invoice_balance = invoice_line.amount_residual
-                        if invoice_balance < 0:
-                            payment.write({'to_pay_move_line_ids': [(4, invoice_line.id)]})
-                            amount_to_reconcile = min(remaining_amount, abs(invoice_balance))
-                            remaining_amount -= amount_to_reconcile
-    
-                    # Si la factura aún tiene un saldo después de este pago, se seguirá utilizando en el próximo pago
+                
+                if payment == payments[0] and self.withholding_line_ids:
+                    payment.l10n_ar_withholding_line_ids = [(6, 0, self.withholding_line_ids.ids)]
+                
+                # Lista temporal para líneas a conciliar con ESTE pago
+                payment_lines = self.env['account.move.line']
+                
+                for invoice in remaining_invoices.filtered(lambda inv: not inv.reconciled):
                     if remaining_amount <= 0:
                         break
+                        
+                    if self.partner_type == 'customer' and payment.payment_type == 'inbound':
+                        if invoice.amount_residual > 0:
+                            amount = min(remaining_amount, invoice.amount_residual)
+                            payment_lines |= invoice
+                            remaining_amount -= amount
+                            
+                    elif self.partner_type == 'supplier' and payment.payment_type == 'outbound':
+                        if invoice.amount_residual < 0:
+                            amount = min(remaining_amount, abs(invoice.amount_residual))
+                            payment_lines |= invoice
+                            remaining_amount -= amount
+                # Asignar TODAS las líneas de una vez al pago
+                if payment_lines:
+                    payment.to_pay_move_line_ids = [(6, 0, payment_lines.ids)]
+                
                 payment.action_post()
-            # Publicar los pagos que han sido conciliados
-            #payments.action_post()
+        
+        # Asignar número de documento
         if not self.name:
-            if self.payment_type == 'inbound':
-                self.name = self.env['ir.sequence'].next_by_code('recibo_de_pagos') or 'New'
-            else:
-                self.name = self.env['ir.sequence'].next_by_code('reporte_de_pagos') or 'New'
-            self.sequence_used = self.name
+            seq_code = 'recibo_de_pagos' if self.payment_type == 'inbound' else 'reporte_de_pagos'
+            self.name = self.env['ir.sequence'].next_by_code(seq_code) or 'New'
+        
         self.state = 'posted'
-        return
+        return True
+
+    def _reconcile_credits_first(self, credit_lines, invoices):
+        """Aplica créditos a facturas y evita reconciliación doble"""
+        for credit in credit_lines.filtered(lambda l: not l.reconciled):
+            remaining_credit = abs(credit.amount_residual)
+            
+            for invoice in invoices.filtered(lambda inv: not inv.reconciled):
+                if remaining_credit <= 0:
+                    break
+                    
+                if self.partner_type == 'customer':
+                    if invoice.amount_residual > 0:
+                        amount = min(remaining_credit, invoice.amount_residual)
+                        (credit + invoice).reconcile()
+                        remaining_credit -= amount
+                else:
+                    if invoice.amount_residual < 0:
+                        amount = min(remaining_credit, abs(invoice.amount_residual))
+                        (credit + invoice).reconcile()
+                        remaining_credit -= amount
 
 
     ###RETENCIONES
@@ -1034,8 +1064,8 @@ class Account_payment_methods(models.Model):
     @api.depends('payment_total_currency', 'to_pay_amount_currency')
     def _compute_payment_difference_currency(self):
         for rec in self:
-            rec.payment_difference_currency = rec._get_payment_difference_currency()
-            #rec.payment_difference_currency = rec._get_payment_difference_currency() - sum(self.withholding_line_ids.mapped('amount'))
+            #rec.payment_difference_currency = rec._get_payment_difference_currency()
+            rec.payment_difference_currency = rec._get_payment_difference_currency() - sum(self.withholding_line_ids.mapped('amount'))
     
     def _get_payment_difference_currency(self):
         return self.to_pay_amount_currency - self.payment_total_currency

@@ -28,6 +28,11 @@ class AccountMove(models.Model):
 )
     exchange_rate = fields.Float('Tasa de cambio')
 
+    manual_withholding_load = fields.Boolean(
+        default=False,
+        copy=False,
+    )
+
     other_currency = fields.Boolean('Divisa extranjera')
     @api.depends('amount', 'to_pay_move_line_ids')
     def _compute_exchange_rate(self):
@@ -150,6 +155,7 @@ class AccountMove(models.Model):
     @api.depends("l10n_ar_fiscal_position_id", "partner_id", "company_id", "date")
     def _compute_l10n_ar_withholding_line_ids(self):
         _logger.info("Override!")
+        
         if self.env.context.get('skip_ar_withholdings'):
             for wizard in self:
                 wizard.l10n_ar_withholding_ids = [Command.clear()]
@@ -159,6 +165,13 @@ class AccountMove(models.Model):
         ], limit=1)
     
         for rec in self.filtered(lambda x: x.partner_type == "supplier"):
+
+            if rec.manual_withholding_load:
+                continue
+            if not rec.to_pay_move_line_ids:
+                rec.l10n_ar_withholding_line_ids = [Command.clear()]
+                continue
+
     
             date = rec.date or fields.Date.context_today(rec)
     
@@ -201,3 +214,31 @@ class AccountMove(models.Model):
             ]
     
             rec.l10n_ar_withholding_line_ids = withholdings
+
+
+    @api.depends("partner_id", "partner_type", "company_id")
+    def _compute_to_pay_move_lines(self):
+
+        return
+    
+        if self.env.context.get("skip_ar_withholdings"):
+            return
+    
+        records = self.filtered(lambda x: x.state == "draft")
+    
+        internal_transfers = records.filtered(
+            lambda x: x.is_internal_transfer
+        )
+    
+        with_payment_pro = self._get_filter_payments(
+            records,
+            ["direct_debit_mandate_id", "pos_session_id"]
+        )
+    
+        if internal_transfers or not self.env.context.get("pay_now"):
+            ((internal_transfers or self) - with_payment_pro).to_pay_move_line_ids = [
+                Command.clear()
+            ]
+    
+        for rec in with_payment_pro:
+            rec._add_all()

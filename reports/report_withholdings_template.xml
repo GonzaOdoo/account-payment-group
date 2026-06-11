@@ -128,7 +128,7 @@
         <t t-call="web.html_container">
             <t t-foreach="docs" t-as="o">
                 <t t-set="lang" t-value="o.partner_id.lang"/>
-                <t t-call="account-payment-group.report_withholding_certificate_document" t-lang="lang"/>
+                <t t-call="account_payment_group.report_withholding_certificate_document" t-lang="lang"/>
             </t>
         </t>
     </template>
@@ -140,8 +140,8 @@
         <field name="binding_model_id" ref="model_account_payment_group"/>
         <field name="report_type">qweb-pdf</field>
         <field name="print_report_name">'Certificado de Retención - %s' % (object.name or '')</field>
-        <field name="report_name">account-payment-group.report_withholding_certificate</field>
-        <field name="report_file">account-payment-group.report_withholding_certificate</field>
+        <field name="report_name">account_payment_group.report_withholding_certificate</field>
+        <field name="report_file">account_payment_group.report_withholding_certificate</field>
     </record>
 </odoo>
 <!--

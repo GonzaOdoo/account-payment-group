@@ -76,6 +76,8 @@
                             </div>
                             <field name="currency_id" readonly= "state not in ['draft','debts']"/>
                             <field name ="exchange_rate" invisible="currency_id != 1" readonly="state not in ['draft','debts']"/>
+                            <field name="company_id"></field>
+                            <field name="fiscal_position_id"></field>
                         </group>
                         <group>
                             <field name="other_currency" invisible="1"/>
