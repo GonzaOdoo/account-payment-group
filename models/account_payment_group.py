@@ -255,15 +255,19 @@ class Account_payment_methods(models.Model):
     fiscal_position_id = fields.Many2one(
         'account.fiscal.position',
         string='Posición Fiscal',
+        compute='_compute_fiscal_position_id',
+        store=True,
+        readonly=False,
         tracking=True,
     )
 
-    @api.onchange('partner_id')
-    def _onchange_partner_id(self):
+
+    @api.depends('partner_id')
+    def _compute_fiscal_position_id(self):
         for rec in self:
-            rec.fiscal_position_id = (
-                rec.partner_id.property_account_position_id
-            )
+            _logger.info("Traer posición fiscal!")
+            rec.fiscal_position_id = rec.partner_id.property_account_position_id
+            _logger.info(rec.fiscal_position_id)
 
     @api.depends('to_pay_move_line_ids')
     def _compute_is_advanced_payment(self):

@@ -66,5 +66,14 @@ class AccountMove(models.Model):
             "res_id": payment_group.id,
             "target": "current",
         }
-   
+
+    @api.depends(
+        'company_id',
+        'company_id.account_fiscal_country_id',
+        'fiscal_position_id',
+        'fiscal_position_id.country_id',
+        'fiscal_position_id.foreign_vat',
+    )
+    def _compute_tax_country_id(self):
+        super()._compute_tax_country_id()
 

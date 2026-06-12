@@ -233,6 +233,7 @@ class l10nArPaymentRegisterWithholding(models.Model):
         self.ensure_one()
         to_date = self._get_payment_source().date or fields.Date.context_today(self)
         from_date = to_date + relativedelta(day=1)
+        _logger.info(f"{from_date},{to_date}")
         return to_date, from_date
 
     def _get_same_period_withholdings_domain(self):
@@ -258,6 +259,7 @@ class l10nArPaymentRegisterWithholding(models.Model):
         self.ensure_one()
         # We search for the payments in the same month of the same regimen and the same code.
         domain_same_period_withholdings = self._get_same_period_withholdings_domain()
+        _logger.info(domain_same_period_withholdings)
         if same_period_partner_withholdings := self.env["account.move.line"]._read_group(
             domain_same_period_withholdings, ["partner_id"], ["balance:sum"]
         ):
@@ -286,6 +288,7 @@ class l10nArPaymentRegisterWithholding(models.Model):
         """Return Cummulated withholding base"""
         self.ensure_one()
         domain_same_period_base = self._get_same_period_base_domain()
+        _logger.info(domain_same_period_base)
         if same_period_partner_base := self.env["account.move.line"]._read_group(
             domain_same_period_base, ["partner_id"], ["balance:sum"]
         ):

@@ -1,4 +1,5 @@
 from odoo.exceptions import UserError
+from odoo import models
 
 class AccountFiscalPositionL10nArTax(models.Model):
     _inherit = "account.fiscal.position.l10n_ar_tax"
