@@ -5,7 +5,7 @@
         <field name="arch" type="xml">
             <form string="Registrar Pago">
                 <group>   
-                    <!--<field name="line_ids" invisible="1"/>-->
+                    <field name="line_ids" invisible="1"/>
                     <field name="amount_received" invisible="1"/>
                     <field name="can_edit_wizard" invisible="1" force_save="1"/>
                     <field name="can_group_payments" invisible="1" force_save="1"/>
@@ -18,7 +18,7 @@
                     <field name="company_id" invisible="1" force_save="1"/>
                     <field name="partner_id" invisible="1" force_save="1"/>
                     <field name="country_code" invisible="1" force_save="1"/>
-                    <field name="currency_id" invisible="1" />
+                    <field name="currency_id" invisible="1"/>
 
                     <field name="show_partner_bank_account" invisible="1"/>
                     <field name="require_partner_bank_account" invisible="1"/>
@@ -33,65 +33,53 @@
                 </group>
                 <group name="group1">
                     <field name="journal_id" string="Diario" options="{'no_open': True, 'no_create': True}" required="1"/>
-                    <field name="payment_method_line_id" string="Método de pago"
-                           required="1"  options="{'no_create': True, 'no_open': True}"/>
-                  <!--  <field name="l10n_latam_check_id" invisible="payment_method_code not in ['in_third_party_checks', 'out_third_party_checks'] and not l10n_latam_check_id"  required="payment_method_code in ['in_third_party_checks', 'out_third_party_checks']" domain = "[('payment_method_code', '=', 'new_third_party_checks'), ('l10n_latam_check_current_journal_id', '=', journal_id), ('state', '=', 'posted'), ('company_id', '=', company_id),('id', 'not in', draft_check_ids),] if payment_type == 'outbound' else [('payment_method_code', '=', 'new_third_party_checks'), ('l10n_latam_check_current_journal_id', '=', False), ('state', '=', 'posted'), ('company_id', '=', company_id),('id', 'not in', draft_check_ids),]" context="{'search_view_ref': 'l10n_latam_check.view_account_payment_third_party_checks_search'}" options="{'no_create': True}"/>
+                    <field name="payment_method_line_id" string="Método de pago" required="1" options="{'no_create': True, 'no_open': True}"/>
                     <field name="l10n_latam_manual_checks" invisible="1"/>
                     <field name="payment_method_code" invisible="1"/>
-                    <field name="l10n_latam_check_number" invisible="payment_method_code != 'new_third_party_checks' and (payment_method_code != 'check_printing' or not l10n_latam_manual_checks)" required="payment_method_code == 'new_third_party_checks' or (payment_method_code == 'check_printing' and l10n_latam_manual_checks)"/>
-                    -->
-                    <!--<field name="l10n_latam_check_bank_id" string="Banco del Cheque" invisible="payment_method_code != 'new_third_party_checks' and (payment_method_code != 'check_printing' or not l10n_latam_manual_checks)" required="payment_method_code == 'new_third_party_checks' or (payment_method_code == 'check_printing' and l10n_latam_manual_checks)"/>
-                    -->
-                   <!-- <field name="l10n_latam_check_issuer_vat" string="CUIT del emisor" invisible="payment_method_code != 'new_third_party_checks' and (payment_method_code != 'check_printing' or not l10n_latam_manual_checks)"/>
-                    <field name="l10n_latam_check_payment_date" invisible="payment_method_code != 'new_third_party_checks' and (payment_method_code != 'check_printing' or not l10n_latam_manual_checks)" />
-                    -->
                 </group>
                 <group name="group2">
-                    <label for="amount" readonly="payment_method_code in ['in_third_party_checks','out_third_party_checks','return_third_party_checks','new_third_party_checks','own_checks']"/>
+                    <label for="amount"/>
                     <div name="amount_div" class="o_row">
-                        <field name="amount" string="Monto" readonly="l10n_latam_check_id != False"/>
-                        <field name="currency_id"
-                               required="1"
-                               options="{'no_create': True, 'no_open': True}"
-                               groups="base.group_multi_currency"/>
+                        <field name="amount" string="Monto" readonly="payment_method_code in ['in_third_party_checks', 'out_third_party_checks', 'return_third_party_checks', 'new_third_party_checks', 'own_checks']"/>
+                        <field name="currency_id" required="1" options="{'no_create': True, 'no_open': True}" groups="base.group_multi_currency"/>
                     </div>
                     <field name="payment_date" string="Fecha de pago"/>
                 </group>
                 <group name="group3">
                     <field name="payment_difference" string="Diferencia de pago" invisible="1"/>
                 </group>
-                <notebook invisible="not can_edit_wizard">
-                    <page name="latam_checks_page" string="Checks" invisible="payment_method_code not in ['in_third_party_checks', 'out_third_party_checks', 'return_third_party_checks', 'new_third_party_checks', 'own_checks']">
-                            <group name="latam_checks" colspan="2">
-                                <field name="l10n_latam_new_check_ids" invisible="payment_method_code not in ['new_third_party_checks', 'own_checks']" nolabel="1" colspan="2">
-                                    <list editable="bottom">
-                                        <field name="company_id" column_invisible="True"/>
-                                        <field name="currency_id" column_invisible="True"/>
-                                        <field name="name"/>
-                                        <field name="bank_id" column_invisible="parent.payment_method_code == 'own_checks'"/>
-                                        <field name="issuer_vat" column_invisible="parent.payment_method_code == 'own_checks'"/>
-                                        <field name="payment_date"/>
-                                        <field name="amount"/>
-                                        <field name="is_echeck"/>
-                                    </list>
-                                </field>
-                                <field name="l10n_latam_move_check_ids" invisible="payment_method_code not in ['in_third_party_checks', 'out_third_party_checks', 'return_third_party_checks']" domain="                                     [('payment_method_code', '=', 'new_third_party_checks'), ('current_journal_id', '=', journal_id), ('company_id', '=', company_id)]                                         if payment_type == 'outbound' else                                     [('payment_method_code', '=', 'new_third_party_checks'), ('current_journal_id', '=', False), ('company_id', '=', company_id)]" options="{'no_create': True}" nolabel="1" colspan="2">
-                                    <list name="existing_checks">
-                                        <field name="company_id" column_invisible="True"/>
-                                        <field name="currency_id" column_invisible="True"/>
-                                        <field name="name"/>
-                                        <field name="bank_id" optional="hide"/>
-                                        <field name="issuer_vat" optional="hide"/>
-                                        <field name="payment_date" optional="show"/>
-                                        <field name="amount"/>
-                                        <field name="is_echeck"/>
-                                    </list>
-                                </field>
-                            </group>
-                        </page>
-                    </notebook>
+              <notebook invisible="not can_edit_wizard">
+                <page name="latam_checks_page" string="Checks" invisible="payment_method_code not in ['in_third_party_checks', 'out_third_party_checks', 'return_third_party_checks', 'new_third_party_checks', 'own_checks']">
+                        <group name="latam_checks" colspan="2">
+                            <field name="l10n_latam_new_check_ids" invisible="payment_method_code not in ['new_third_party_checks', 'own_checks']" nolabel="1" colspan="2">
+                                <list editable="bottom">
+                                    <field name="company_id" column_invisible="True"/>
+                                    <field name="currency_id" column_invisible="True"/>
+                                    <field name="name"/>
+                                    <field name="bank_id" column_invisible="parent.payment_method_code == 'own_checks'"/>
+                                    <field name="issuer_vat" column_invisible="parent.payment_method_code == 'own_checks'"/>
+                                    <field name="payment_date"/>
+                                    <field name="amount"/>
+                                    <field name="is_echeck"/>
+                                </list>
+                            </field>
+                            <field name="l10n_latam_move_check_ids" invisible="payment_method_code not in ['in_third_party_checks', 'out_third_party_checks', 'return_third_party_checks']" domain="                                     [('payment_method_code', '=', 'new_third_party_checks'), ('current_journal_id', '=', journal_id), ('company_id', '=', company_id)]                                         if payment_type == 'outbound' else                                     [('payment_method_code', '=', 'new_third_party_checks'), ('current_journal_id', '=', False), ('company_id', '=', company_id)]" options="{'no_create': True}" nolabel="1" colspan="2">
+                                <list name="existing_checks">
+                                    <field name="company_id" column_invisible="True"/>
+                                    <field name="currency_id" column_invisible="True"/>
+                                    <field name="name"/>
+                                    <field name="bank_id" optional="hide"/>
+                                    <field name="issuer_vat" optional="hide"/>
+                                    <field name="payment_date" optional="show"/>
+                                    <field name="amount"/>
+                                    <field name="is_echeck"/>
+                                </list>
+                            </field>
+                        </group>
+                    </page>
+                </notebook>
                 <footer>
-                    <button string="Añadir pago" name="action_create_payments"  type="object" class="oe_highlight" data-hotkey="q"/>
+                    <button string="Añadir pago" name="action_create_payments" type="object" class="oe_highlight" data-hotkey="q"/>
                     <button string="Cancelar" class="btn btn-secondary" special="cancel" data-hotkey="x"/>
                 </footer>
             </form>

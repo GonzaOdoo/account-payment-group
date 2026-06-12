@@ -139,6 +139,7 @@ class l10nArPaymentRegisterWithholding(models.Model):
             is_refund=False,
             rounding_method="round_per_line",
         )
+        _logger.info(taxes_res)
         tax_amount = taxes_res["taxes"][0]["amount"]
         tax_account_id = taxes_res["taxes"][0]["account_id"]
         tax_repartition_line_id = taxes_res["taxes"][0]["tax_repartition_line_id"]
@@ -292,10 +293,31 @@ class l10nArPaymentRegisterWithholding(models.Model):
         return 0.0
 
     def _get_withholding_tax(self):
-        """Return the applicable withheld tax"""
+        _logger.warning("GET WITHHOLDING TAX CALLED")
         self.ensure_one()
+    
+        pay = self._get_payment_source()
+        partner = pay.partner_id
+        date = pay.date
+    
+        fp = partner.property_account_position_id
+    
+        if not fp:
+            return self.tax_id
+    
+        fp_tax = self.env["account.fiscal.position.l10n_ar_tax"].search([
+            ("fiscal_position_id", "=", fp.id),
+            ("tax_type", "=", "withholding"),
+            ("default_tax_id", "=", self.tax_id.id),
+        ], limit=1)
+        _logger.info(f"Fiscal position tax? {fp_tax}")
+        if fp_tax:
+            taxes = fp_tax._get_missing_taxes(partner, date)
+            _logger.info(taxes)
+            if taxes:
+                return taxes[0]
+        
         return self.tax_id
-
     
     #def _get_withholding_tax(self):
     #    """Return the applicable withheld tax"""
