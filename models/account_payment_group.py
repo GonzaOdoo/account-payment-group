@@ -594,7 +594,7 @@ class Account_payment_methods(models.Model):
             'type': 'ir.actions.act_window',
             'res_model': 'custom.account.payment.register',
             'view_mode': 'form',
-            'view_id': self.env.ref('account-payment-group.view_custom_account_payment_register_form').id,  # Reemplaza con el ID de la vista del asistente
+            'view_id': self.env.ref('account_payment_group.view_custom_account_payment_register_form').id,  # Reemplaza con el ID de la vista del asistente
             'target': 'new',
             'res_id': payment_register.id,
             'context': {
