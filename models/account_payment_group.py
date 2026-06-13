@@ -729,7 +729,10 @@ class Account_payment_methods(models.Model):
                             remaining_amount -= amount
                 # Asignar TODAS las líneas de una vez al pago
                 if payment_lines:
-                    payment.to_pay_move_line_ids = [(6, 0, payment_lines.ids)]
+                    payment.with_context(skip_ar_withholdings=True).write({
+                        "to_pay_move_line_ids":[(6, 0, payment_lines.ids)]
+                    })
+                    #payment.to_pay_move_line_ids = [(6, 0, payment_lines.ids)]
                 payment.manual_withholding_load = True
                 payment.with_context(skip_ar_withholdings=True).action_post()
         
