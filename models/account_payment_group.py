@@ -682,8 +682,12 @@ class Account_payment_methods(models.Model):
         if self.is_advanced_payment:
             for payment in payments:
                 if payment == payments[0] and self.withholding_line_ids:
-                    payment.l10n_ar_withholding_line_ids = [(6, 0, self.withholding_line_ids.ids)]
-                payment.action_post()
+                    payment.with_context(skip_ar_withholdings=True).write({
+                        "l10n_ar_withholding_line_ids":[(6, 0, self.withholding_line_ids.ids)]
+                    })
+                    #payment.l10n_ar_withholding_line_ids = [(6, 0, self.withholding_line_ids.ids)]
+                #payment.manual_withholding_load = True
+                payment.with_context(skip_ar_withholdings=True).action_post()
         else:
             if not invoices or not payments:
                 raise UserError("No hay facturas o pagos pendientes para conciliar.")
@@ -700,7 +704,10 @@ class Account_payment_methods(models.Model):
                 remaining_amount = payment.amount
                 
                 if payment == payments[0] and self.withholding_line_ids:
-                    payment.l10n_ar_withholding_line_ids = [(6, 0, self.withholding_line_ids.ids)]
+                    payment.with_context(skip_ar_withholdings=True).write({
+                        "l10n_ar_withholding_line_ids":[(6, 0, self.withholding_line_ids.ids)]
+                    })
+                    #payment.l10n_ar_withholding_line_ids = [(6, 0, self.withholding_line_ids.ids)]
                 
                 # Lista temporal para líneas a conciliar con ESTE pago
                 payment_lines = self.env['account.move.line']
@@ -723,8 +730,8 @@ class Account_payment_methods(models.Model):
                 # Asignar TODAS las líneas de una vez al pago
                 if payment_lines:
                     payment.to_pay_move_line_ids = [(6, 0, payment_lines.ids)]
-                
-                payment.action_post()
+                payment.manual_withholding_load = True
+                payment.with_context(skip_ar_withholdings=True).action_post()
         
         # Asignar número de documento
         if not self.name:
