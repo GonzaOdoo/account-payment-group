@@ -85,52 +85,81 @@
                             </tr>
                         </t>
                         <t t-foreach="o.to_pay_payment_ids" t-as="payment">
-                            <t t-set="amount" t-value="amount + payment.amount"/>
-                            <!-- TODO implementar cheques -->
-                            <!-- <t t-foreach="o.payment_ids.filtered(lambda x: x.payment_method_code in ['check_printing', 'new_third_party_checks', 'in_third_party_checks', 'out_third_party_checks']).sorted(key=lambda r:r.l10n_latam_check_payment_date or r.date)" t-as="line">
-                                <t t-set="check" t-value="line.l10n_latam_check_id or line"/>
-                                <tr>
-                                    <td>
-                                        <span t-out='"Cheque nro %s - %s - (%s)" % (check.check_number, check.l10n_latam_check_bank_id.name or check.journal_id.name, check.payment_method_line_id.name)'/><span t-if="check.l10n_latam_check_payment_date"> - Venc. <span t-field="check.l10n_latam_check_payment_date"/></span>
-                                   </td>
-                                    <td  class="text-right" t-if="any(o.mapped('payment_ids.other_currency'))">
-                                        <t t-if="check.currency_id">
-                                            <span class="text-nowrap" t-field="check.amount_signed" t-field-options='{"widget": "monetary",  "display_currency": "check.currency_id"}'/>
-                                        </t>
-                                    </td>
-                                    <td class="text-right o_price_total">
-                                        <span class="text-nowrap" t-field="check.l10n_ar_amount_company_currency_signed"/>
-                                    </td>
-                                </tr>
-                            </t> -->
-                              
-                            <tr> 
-                                <td>
-                                    <span t-if="payment.journal_id.id ==  153">Efectivo</span>
-                                    <span t-if="payment.journal_id.id !=  153" t-field="payment.journal_id.name"/>
-                                </td>
-                                <!-- <td class="text-right" t-if="any(o.mapped('payment_ids.other_currency'))">
-                                    <t t-if="line.other_currency">
-                                    <span class="text-nowrap" t-field="line.amount_signed" t-field-options='{"widget": "monetary",  "display_currency": "line.currency_id"}'/>
-                                    </t>
-                                </td> -->
-                                <td>
-                                    <span t-if="payment.payment_method_line_id" t-field="payment.payment_method_line_id"/>
-                                    <span t-if="not payment.payment_method_line_id"> - </span>
-                                </td>
-                                <td>
-                                    <span t-field="payment.l10n_latam_check_number"> </span>
-                                </td>
-        
-                                <td>
-                                    <span t-field="payment.l10n_latam_check_payment_date"> </span>
-                                </td>
-                
-                                <td class="text-right o_price_total">
-                                    <span class="text-nowrap" t-field="payment.amount"/>
-                                </td>
-                            </tr>
-                        </t>
+    
+        <t t-if="payment.l10n_latam_new_check_ids or payment.l10n_latam_move_check_ids">
+    
+            <!-- Cheques propios -->
+            <t t-foreach="payment.l10n_latam_new_check_ids" t-as="check">
+                <t t-set="amount" t-value="amount + check.amount"/>
+    
+                <tr>
+                    <td>Cheque propio</td>
+                    <td>
+                        <span t-field="payment.payment_method_line_id"/>
+                    </td>
+                    <td>
+                        <span t-field="check.name"/>
+                    </td>
+                    <td>
+                        <span t-field="check.payment_date"/>
+                    </td>
+                    <td class="text-right o_price_total">
+                        <span t-field="check.amount"/>
+                    </td>
+                </tr>
+            </t>
+    
+            <!-- Cheques de terceros -->
+            <t t-foreach="payment.l10n_latam_move_check_ids" t-as="check">
+                <t t-set="amount" t-value="amount + check.amount"/>
+    
+                <tr>
+                    <td>Cheque tercero</td>
+                    <td>
+                        <span t-field="payment.payment_method_line_id"/>
+                    </td>
+                    <td>
+                        <span t-field="check.name"/>
+                    </td>
+                    <td>
+                        <span t-field="check.payment_date"/>
+                    </td>
+                    <td class="text-right o_price_total">
+                        <span t-field="check.amount"/>
+                    </td>
+                </tr>
+            </t>
+    
+        </t>
+
+    <t t-else="">
+        <!-- Pago normal (efectivo, transferencia, etc.) -->
+
+        <t t-set="amount" t-value="amount + payment.amount"/>
+
+        <tr>
+            <td>
+                <span t-if="payment.journal_id.id == 153">Efectivo</span>
+                <span t-if="payment.journal_id.id != 153"
+                      t-field="payment.journal_id.name"/>
+            </td>
+
+            <td>
+                <span t-if="payment.payment_method_line_id"
+                      t-field="payment.payment_method_line_id"/>
+                <span t-if="not payment.payment_method_line_id">-</span>
+            </td>
+
+            <td/>
+            <td/>
+            <td class="text-right o_price_total">
+                <span class="text-nowrap" t-field="payment.amount"/>
+            </td>
+        </tr>
+
+    </t>
+
+</t>
     
                     </tbody>
                     <tfoot>
