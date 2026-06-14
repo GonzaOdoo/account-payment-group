@@ -1119,8 +1119,8 @@ class Account_payment_methods(models.Model):
                     continue
                 if rec.state != 'posted' and len(rec.to_pay_move_line_ids) > 0:
                     first_move_line = rec.to_pay_move_line_ids[0]
-                    if first_move_line.move_id.l10n_ar_currency_rate:
-                        rec.exchange_rate = first_move_line.move_id.l10n_ar_currency_rate
+                    if first_move_line.move_id.inverse_invoice_currency_rate:
+                        rec.exchange_rate = first_move_line.move_id.inverse_invoice_currency_rate
                         _logger.info(rec.exchange_rate)
                     else:
                         rec.exchange_rate = rec.payment_total_currency and (
@@ -1129,8 +1129,8 @@ class Account_payment_methods(models.Model):
                 else:
                     if rec.matched_move_line_ids:
                         first_move_line = rec.matched_move_line_ids[0] if rec.matched_move_line_ids else False
-                        if first_move_line.move_id.l10n_ar_currency_rate:
-                            rec.exchange_rate = first_move_line.move_id.l10n_ar_currency_rate
+                        if first_move_line.move_id.inverse_invoice_currency_rate:
+                            rec.exchange_rate = first_move_line.move_id.inverse_invoice_currency_rate
                             _logger.info(rec.exchange_rate)
                         else:
                             rec.exchange_rate = rec.payment_total and (
