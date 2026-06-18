@@ -490,14 +490,14 @@ class L10n_LatamPaymentRegisterCheck(models.TransientModel):
     @api.depends(
         'payment_register_id.partner_id',
         'payment_custom_register_id.partner_id',
+        'payment_custom_register_id.multiple_payment_id',
     )
     def _compute_issuer_vat(self):
         for rec in self:
             partner = (
                 rec.payment_register_id.partner_id
-                or rec.payment_custom_register_id.partner_id
+                or rec.payment_custom_register_id.multiple_payment_id.partner_id
             )
-
             rec.issuer_vat = partner.vat if partner else False
 
 
