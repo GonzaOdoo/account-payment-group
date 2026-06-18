@@ -262,12 +262,12 @@ class Account_payment_methods(models.Model):
     )
 
 
-    @api.depends('partner_id')
+    @api.depends('partner_id','company_id')
     def _compute_fiscal_position_id(self):
         for rec in self:
             _logger.info("Traer posición fiscal!")
-            rec.fiscal_position_id = rec.partner_id.property_account_position_id
-            _logger.info(rec.fiscal_position_id)
+            fiscal_position = rec.partner_id.with_company(rec.company_id).property_account_position_id
+            rec.fiscal_position_id = fiscal_position
 
     @api.depends('to_pay_move_line_ids')
     def _compute_is_advanced_payment(self):

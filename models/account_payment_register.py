@@ -175,6 +175,7 @@ class CustomAccountPaymentRegister(models.TransientModel):
                         #'owner_name': check.owner_name,
                         'bank_id': check.bank_id.id,
                         'payment_date': check.payment_date,
+                        'issuer_vat':check.issuer_vat,
                         #'date': check.date,
                         'currency_id': check.currency_id.id,
                         'is_echeck': check.is_echeck,
@@ -485,6 +486,19 @@ class L10n_LatamPaymentRegisterCheck(models.TransientModel):
     
     payment_custom_register_id = fields.Many2one('custom.account.payment.register', required=False, ondelete='cascade')
     payment_register_id = fields.Many2one('account.payment.register', required=False, ondelete='cascade')
+
+    @api.depends(
+        'payment_register_id.partner_id',
+        'payment_custom_register_id.partner_id',
+    )
+    def _compute_issuer_vat(self):
+        for rec in self:
+            partner = (
+                rec.payment_register_id.partner_id
+                or rec.payment_custom_register_id.partner_id
+            )
+
+            rec.issuer_vat = partner.vat if partner else False
 
 
 class L10n_ArPaymentRegisterWithholding(models.TransientModel):
