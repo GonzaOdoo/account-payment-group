@@ -351,13 +351,7 @@ class l10nArPaymentRegisterWithholding(models.Model):
         f = company_currency.format
     
         if taxable_amount <= 0:
-            ref = (
-                f"{f(self.base_amount)} + "
-                f"{f(same_period_base)} - "
-                f"{f(non_taxable_amount)} = "
-                f"{f(net_amount - non_taxable_amount)} "
-                f"(no corresponde aplicar)"
-            )
+            ref = (f"{regimen.codigo_de_regimen}-{regimen.concepto_referencia}")
             return 0.0, ref
     
         aliquot = (
@@ -370,12 +364,6 @@ class l10nArPaymentRegisterWithholding(models.Model):
     
         tax_amount = max(0.0, tax_amount)
     
-        ref = (
-            f"({f(self.base_amount)} + "
-            f"{f(same_period_base)} - "
-            f"{f(non_taxable_amount)}) "
-            f"* {aliquot}% - "
-            f"{f(same_period_withholdings)}"
-        )
+        ref = (f"{regimen.codigo_de_regimen}-{regimen.concepto_referencia}")
     
         return tax_amount, ref
