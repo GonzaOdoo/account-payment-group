@@ -198,7 +198,7 @@ class AccountMove(models.Model):
     
             if (
                 partner.default_regimen_ganancias_id
-                and partner.imp_ganancias_padron in ["AC", "NI", "EX"]
+                and partner.imp_ganancias_padron in ["AC", "NI"]
             ):
                 taxes |= earnings_tax
     
