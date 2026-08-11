@@ -336,7 +336,9 @@ class l10nArPaymentRegisterWithholding(models.Model):
         company_currency = self._get_payment_source().company_currency_id
     
         regimen = partner.default_regimen_ganancias_id
-    
+        state = partner.imp_ganancias_padron
+        if state in ['EX','NC']:
+            return 0.0, False
         if not regimen:
             return 0.0, False
     
