@@ -40,7 +40,7 @@ class l10nArPaymentRegisterWithholding(models.Model):
             rec.currency_id = pay.company_currency_id
 
     def _get_payment_source(self):
-        return self.payment_id or self.multiple_payment_id
+        return self.multiple_payment_id or self.payment_id
 
 
     def _compute_base_amount(self):
