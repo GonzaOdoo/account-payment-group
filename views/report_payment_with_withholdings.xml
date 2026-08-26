@@ -140,13 +140,11 @@
         <tr>
             <td>
                 <span t-if="payment.journal_id.id == 153">Efectivo</span>
-                <span t-if="payment.journal_id.id != 153"
-                      t-field="payment.journal_id.name"/>
+                <span t-if="payment.journal_id.id != 153" t-field="payment.journal_id.name"/>
             </td>
 
             <td>
-                <span t-if="payment.payment_method_line_id"
-                      t-field="payment.payment_method_line_id"/>
+                <span t-if="payment.payment_method_line_id" t-field="payment.payment_method_line_id"/>
                 <span t-if="not payment.payment_method_line_id">-</span>
             </td>
 

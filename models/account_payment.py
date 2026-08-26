@@ -33,6 +33,34 @@ class AccountMove(models.Model):
         copy=False,
     )
 
+    check_warning = fields.Text(
+        string="Advertencias de cheques",
+        compute="_compute_check_warning",
+    )
+
+    @api.depends(
+        "l10n_latam_new_check_ids",
+        "l10n_latam_new_check_ids.name",
+        "l10n_latam_new_check_ids.date",
+        "l10n_latam_new_check_ids.payment_date",
+    )
+    def _compute_check_warning(self):
+        for payment in self:
+            warnings = []
+    
+            for check in payment.l10n_latam_new_check_ids:
+                check_warnings = check._get_validation_warnings()
+    
+                for warning in check_warnings:
+                    warnings.append(
+                        f"Cheque {check.name}: {warning}"
+                    )
+    
+            payment.check_warning = "\n".join(
+                f"• {warning}"
+                for warning in warnings
+            )
+
     other_currency = fields.Boolean('Divisa extranjera')
     @api.depends('amount', 'to_pay_move_line_ids')
     def _compute_exchange_rate(self):

@@ -260,8 +260,24 @@ class Account_payment_methods(models.Model):
         readonly=False,
         tracking=True,
     )
+    check_warning = fields.Text(
+        string="Advertencias de cheques",
+        compute="_compute_check_warning",
+    )
 
-
+    @api.depends(
+    "to_pay_payment_ids.check_warning",
+    )
+    def _compute_check_warning(self):
+        for group in self:
+            warnings = []
+    
+            for payment in group.to_pay_payment_ids:
+                if payment.check_warning:
+                    warnings.append(payment.check_warning)
+    
+            group.check_warning = "\n".join(warnings)
+    
     @api.depends('partner_id','company_id')
     def _compute_fiscal_position_id(self):
         for rec in self:
@@ -729,11 +745,11 @@ class Account_payment_methods(models.Model):
                             remaining_amount -= amount
                 # Asignar TODAS las líneas de una vez al pago
                 if payment_lines:
+                    payment.manual_withholding_load = True
                     payment.with_context(skip_ar_withholdings=True).write({
                         "to_pay_move_line_ids":[(6, 0, payment_lines.ids)]
                     })
                     #payment.to_pay_move_line_ids = [(6, 0, payment_lines.ids)]
-                payment.manual_withholding_load = True
                 payment.with_context(skip_ar_withholdings=True).action_post()
         
         # Asignar número de documento
