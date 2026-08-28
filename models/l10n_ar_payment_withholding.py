@@ -115,6 +115,12 @@ class l10nArPaymentRegisterWithholding(models.Model):
             )
 
         pay = self._get_payment_source()
+        # Si el proveedor está exento de IIBB, no se practica la retención
+        if (
+            tax.l10n_ar_tax_type in ["iibb_total","iibb_untaxed"]
+            and pay.partner_id.l10n_ar_gross_income_type == "exempt"
+        ):
+            return 0.0, False, False, False
         company_currency = pay.company_currency_id
 
         # base_amount ya está en C (ARS) — no se necesita conversión
