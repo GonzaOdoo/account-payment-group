@@ -189,9 +189,10 @@ class AccountMove(models.Model):
                 wizard.l10n_ar_withholding_ids = [Command.clear()]
             return
         earnings_tax = self.env["account.tax"].search([
-            ("l10n_ar_tax_type", "=", "earnings")
+            ("l10n_ar_tax_type", "=", "earnings"),
+            ("company_id", "=", self.company_id),
         ], limit=1)
-    
+            
         for rec in self.filtered(lambda x: x.partner_type == "supplier"):
 
             if rec.manual_withholding_load:
