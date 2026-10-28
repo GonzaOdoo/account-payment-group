@@ -39,24 +39,35 @@ class AccountMove(models.Model):
             }
 
     def create_payment_group_from_invoice_form(self):
-        """ Crea un pago en grupo a partir de una factura seleccionada en el formulario. """
+        """Crea un pago en grupo a partir de una factura seleccionada."""
 
-        self.ensure_one()  # Solo permite una factura a la vez en el formulario
+        self.ensure_one()
 
         if self.state != "posted" or self.payment_state in ["paid", "reversed"]:
             return
 
         partner = self.partner_id
+        is_customer = self.move_type in ["out_invoice", "out_refund", "out_receipt"]
 
-        # Crear un pago en grupo
         payment_group = self.env["account.payment.group"].create({
             "partner_id": partner.id,
-            "partner_type": "customer" if self.move_type in ["out_invoice", "out_refund"] else "supplier",
+            "partner_type": "customer" if is_customer else "supplier",
             "company_id": self.company_id.id,
         })
 
-        # Asociar las facturas al pago en grupo
-        payment_group.to_pay_move_line_ids = [(6, 0, self.line_ids.filtered(lambda l: l.account_id.reconcile and not l.reconciled).ids)]
+        # Solo incluir las líneas pendientes de cuentas por cobrar o pagar.
+        account_type = (
+            "asset_receivable" if is_customer else "liability_payable"
+        )
+
+        payable_lines = self.line_ids.filtered(
+            lambda line:
+                line.account_id.account_type == account_type
+                and not line.reconciled
+            and line.account_id.reconcile
+        )
+
+        payment_group.to_pay_move_line_ids = [(6, 0, payable_lines.ids)]
 
         return {
             "type": "ir.actions.act_window",
